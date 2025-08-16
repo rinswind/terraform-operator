@@ -27,7 +27,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -45,9 +44,7 @@ var testEnv *envtest.Environment
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Terraform v1alpha1",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "Terraform v1alpha1")
 }
 
 func resetClientSet() {
@@ -64,8 +61,8 @@ var _ = BeforeSuite(func() {
 	}
 
 	os.Setenv("DOCKER_REGISTRY", "docker.io")
-	os.Setenv("TERRAFORM_RUNNER_IMAGE", "ibraheemalsaady/terraform-runner")
-	os.Setenv("TERRAFORM_RUNNER_IMAGE_TAG", "0.0.3")
+	os.Setenv("TERRAFORM_RUNNER_IMAGE", "tobo/terraform-runner")
+	os.Setenv("TERRAFORM_RUNNER_IMAGE_TAG", "0.0.4")
 	os.Setenv("KNOWN_HOSTS_CONFIGMAP_NAME", "operator-known-hosts")
 
 	err := SchemeBuilder.AddToScheme(scheme.Scheme)

@@ -37,7 +37,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -69,17 +68,15 @@ var (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "Controller Suite")
 }
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	os.Setenv("DOCKER_REGISTRY", "docker.io")
-	os.Setenv("TERRAFORM_RUNNER_IMAGE", "ibraheemalsaady/terraform-runner")
-	os.Setenv("TERRAFORM_RUNNER_IMAGE_TAG", "0.0.3")
+	os.Setenv("TERRAFORM_RUNNER_IMAGE", "tobo/terraform-runner")
+	os.Setenv("TERRAFORM_RUNNER_IMAGE_TAG", "0.0.4")
 	os.Setenv("KNOWN_HOSTS_CONFIGMAP_NAME", "operator-known-hosts")
 
 	By("bootstrapping test environment")
@@ -161,7 +158,7 @@ func prepareRunnerRBAC() error {
 			Name: serviceAccountName,
 		},
 		Rules: []rbacv1.PolicyRule{
-			rbacv1.PolicyRule{
+			{
 				APIGroups: []string{""},
 				Resources: []string{"secrets"},
 				Verbs:     []string{"get", "update"},
@@ -179,7 +176,7 @@ func prepareRunnerRBAC() error {
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 		Subjects: []rbacv1.Subject{
-			rbacv1.Subject{
+			{
 				Kind:      "ServiceAccount",
 				Name:      serviceAccountName,
 				Namespace: namespace,
@@ -188,22 +185,17 @@ func prepareRunnerRBAC() error {
 	}
 
 	ctx := context.Background()
+	ktl := kube.ClientSet
 
-	_, err := kube.ClientSet.CoreV1().ServiceAccounts("default").Create(ctx, serviceAccount, metav1.CreateOptions{})
-
-	if err != nil {
+	if _, err := ktl.CoreV1().ServiceAccounts("default").Create(ctx, serviceAccount, metav1.CreateOptions{}); err != nil {
 		return err
 	}
 
-	_, err = kube.ClientSet.RbacV1().ClusterRoles().Create(ctx, clusterRole, metav1.CreateOptions{})
-
-	if err != nil {
+	if _, err := ktl.RbacV1().ClusterRoles().Create(ctx, clusterRole, metav1.CreateOptions{}); err != nil {
 		return err
 	}
 
-	_, err = kube.ClientSet.RbacV1().ClusterRoleBindings().Create(ctx, clusterRoleBinding, metav1.CreateOptions{})
-
-	if err != nil {
+	if _, err := ktl.RbacV1().ClusterRoleBindings().Create(ctx, clusterRoleBinding, metav1.CreateOptions{}); err != nil {
 		return err
 	}
 
@@ -216,7 +208,6 @@ func makeRunJobRunning(r *v1alpha1.Terraform) {
 	name := getRunName(r.Name, r.Status.RunID)
 
 	job, _ := jobsClient.Get(context.Background(), name, metav1.GetOptions{})
-
 	if job == nil {
 		return
 	}
@@ -228,7 +219,6 @@ func makeRunJobRunning(r *v1alpha1.Terraform) {
 	}
 
 	jobsClient.Update(context.Background(), job, metav1.UpdateOptions{})
-
 }
 
 func makeRunJobSucceed(r *v1alpha1.Terraform) {
@@ -237,7 +227,6 @@ func makeRunJobSucceed(r *v1alpha1.Terraform) {
 	name := getRunName(r.Name, r.Status.RunID)
 
 	job, _ := jobsClient.Get(context.Background(), name, metav1.GetOptions{})
-
 	if job == nil {
 		return
 	}
@@ -257,7 +246,6 @@ func makeRunJobFail(r *v1alpha1.Terraform) {
 	name := getRunName(r.Name, r.Status.RunID)
 
 	job, _ := jobsClient.Get(context.Background(), name, metav1.GetOptions{})
-
 	if job == nil {
 		return
 	}
@@ -269,7 +257,6 @@ func makeRunJobFail(r *v1alpha1.Terraform) {
 	}
 
 	jobsClient.Update(context.Background(), job, metav1.UpdateOptions{})
-
 }
 
 func isJobDeleted(r *v1alpha1.Terraform) bool {
