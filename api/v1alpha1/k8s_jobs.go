@@ -181,7 +181,6 @@ func getInitContainersSpec(t *Terraform) []corev1.Container {
 
 // getJobSpecForRun returns a Kubernetes job spec for the Terraform Runner
 func getJobSpecForRun(t *Terraform, owner metav1.OwnerReference) *batchv1.Job {
-
 	envVars := t.getEnvVariables()
 	volumes := t.getJobVolumes()
 	mounts := t.getJobVolumeMounts()
@@ -201,7 +200,7 @@ func getJobSpecForRun(t *Terraform, owner metav1.OwnerReference) *batchv1.Job {
 					Labels: getCommonLabels(t.Name, t.Status.RunID),
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "terraform-runner",
+					ServiceAccountName: runnerRBACName,
 					InitContainers:     getInitContainersSpec(t),
 					Containers: []corev1.Container{
 						{
@@ -230,13 +229,7 @@ func getJobForRun(ctx context.Context, runName string, namespace string, runID s
 
 	name := getUniqueResourceName(runName, runID)
 
-	job, err := jobs.Get(ctx, name, metav1.GetOptions{})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return job, err
+	return jobs.Get(ctx, name, metav1.GetOptions{})
 }
 
 // createJobForRun creates a Kubernetes Job to execute the workflow/run
@@ -246,12 +239,7 @@ func createJobForRun(ctx context.Context, run *Terraform) (*batchv1.Job, error) 
 	ownerRef := run.GetOwnerReference()
 
 	job := getJobSpecForRun(run, ownerRef)
-
-	if _, err := jobs.Create(ctx, job, metav1.CreateOptions{}); err != nil {
-		return nil, err
-	}
-
-	return job, nil
+	return jobs.Create(ctx, job, metav1.CreateOptions{})
 }
 
 // deleteJobByRun deletes the Kubernetes Job of the workflow/run
@@ -262,11 +250,5 @@ func deleteJobByRun(ctx context.Context, runName string, namespace string, runID
 
 	deletePolicy := metav1.DeletePropagationForeground
 
-	if err := jobs.Delete(ctx, resourceName, metav1.DeleteOptions{
-		PropagationPolicy: &deletePolicy,
-	}); err != nil {
-		return err
-	}
-
-	return nil
+	return jobs.Delete(ctx, resourceName, metav1.DeleteOptions{PropagationPolicy: &deletePolicy})
 }

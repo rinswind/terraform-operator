@@ -19,13 +19,7 @@ func createServiceAccount(ctx context.Context, name string, namespace string) (*
 		},
 	}
 
-	sa, err := kube.ClientSet.CoreV1().ServiceAccounts(namespace).Create(ctx, key, metav1.CreateOptions{})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return sa, nil
+	return kube.ClientSet.CoreV1().ServiceAccounts(namespace).Create(ctx, key, metav1.CreateOptions{})
 }
 
 // createRoleBinding creates a Kubernetes RoleBinding for the Terraform Runner
@@ -41,7 +35,7 @@ func createRoleBinding(ctx context.Context, name string, namespace string) (*rba
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 		Subjects: []rbacv1.Subject{
-			rbacv1.Subject{
+			{
 				Kind:      "ServiceAccount",
 				Name:      name,
 				Namespace: namespace,
@@ -49,55 +43,47 @@ func createRoleBinding(ctx context.Context, name string, namespace string) (*rba
 		},
 	}
 
-	role, err := kube.ClientSet.RbacV1().RoleBindings(namespace).Create(ctx, key, metav1.CreateOptions{})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return role, nil
+	return kube.ClientSet.RbacV1().RoleBindings(namespace).Create(ctx, key, metav1.CreateOptions{})
 }
 
 // isServiceAccountExist checks whether the ServiceAccount for the Terraform Runner exist
 func isServiceAccountExist(ctx context.Context, name string, namespace string) (bool, error) {
 	_, err := kube.ClientSet.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
 
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-
-		return false, err
+	if err == nil {
+		return true, nil
 	}
 
-	return true, nil
+	if errors.IsNotFound(err) {
+		return false, nil
+	}
+
+	return false, err
 }
 
 // isRoleBindingExist checks if the RoleBinding for the Terraform Runner exists
 func isRoleBindingExist(ctx context.Context, name string, namespace string) (bool, error) {
 	_, err := kube.ClientSet.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
 
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-
-		return false, err
+	if err == nil {
+		return true, nil
 	}
 
-	return true, nil
+	if errors.IsNotFound(err) {
+		return false, nil
+	}
+
+	return false, err
 }
 
 // createRbacConfigIfNotExist validates if RBAC exist for the Terraform Runner and creates it if not exist
 func createRbacConfigIfNotExist(ctx context.Context, name string, namespace string) error {
 	saExist, err := isServiceAccountExist(ctx, name, namespace)
-
 	if err != nil {
 		return err
 	}
 
 	roleBindingExist, err := isRoleBindingExist(ctx, name, namespace)
-
 	if err != nil {
 		return err
 	}

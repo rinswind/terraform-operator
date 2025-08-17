@@ -292,19 +292,16 @@ func (t *Terraform) CreateTerraformRun(ctx context.Context, namespacedName types
 	}
 
 	_, err := createConfigMapForModule(ctx, namespacedName, t)
-
 	if err != nil {
 		return nil, err
 	}
 
 	_, err = createSecretForOutputs(ctx, namespacedName, t)
-
 	if err != nil {
 		return nil, err
 	}
 
 	job, err := createJobForRun(ctx, t)
-
 	if err != nil {
 		return nil, err
 	}
