@@ -33,3 +33,5 @@ coverage.txt
 **/*k8s-secret.yaml
 
 .vscode
+
+config/samples-local

@@ -122,6 +122,7 @@ func main() {
 	}
 
 	// Registering clientset
+	// TODO: Should use the manager caching client instead
 	_, err = kube.CreateK8SConfig()
 	if err != nil {
 		setupLog.Error(err, "could not create Kubernetes REST config")

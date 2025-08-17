@@ -55,7 +55,6 @@ func (r *TerraformReconciler) handleRunCreate(ctx context.Context, run *v1alpha1
 	setVariablesFromDependencies(run, dependencies)
 
 	_, err = run.CreateTerraformRun(ctx, namespacedName)
-
 	if err != nil {
 		r.Log.Error(err, "failed create a terraform run")
 
@@ -97,15 +96,13 @@ func (r *TerraformReconciler) handleRunDelete(ctx context.Context, run *v1alpha1
 
 func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, run *v1alpha1.Terraform) (ctrl.Result, error) {
 	job, err := run.GetJobByRun(ctx)
-
-	r.Log.Info("waiting for terraform job run to complete", "name", job.Name)
-
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	startTime, err := time.Parse(time.UnixDate, run.Status.StartedTime)
+	r.Log.Info("waiting for terraform job run to complete", "name", job.Name)
 
+	startTime, err := time.Parse(time.UnixDate, run.Status.StartedTime)
 	if err != nil {
 		r.Log.Error(err, "failed to parse workflow start time")
 	}
@@ -119,13 +116,12 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, run *v1alph
 
 	// job is still running
 	if job.Status.Active > 0 {
-		if !run.IsRunning() {
-			r.updateRunStatus(ctx, run, v1alpha1.RunRunning)
-
-			r.Recorder.Event(run, "Normal", "Running", fmt.Sprintf("Run(%s) waiting for run job to finish", run.Status.RunID))
+		if run.IsRunning() {
+			return ctrl.Result{RequeueAfter: r.requeueJobWatch}, nil
 		}
 
-		return ctrl.Result{RequeueAfter: r.requeueJobWatch}, nil
+		r.updateRunStatus(ctx, run, v1alpha1.RunRunning)
+		r.Recorder.Event(run, "Normal", "Running", fmt.Sprintf("Run(%s) waiting for run job to finish", run.Status.RunID))
 	}
 
 	// job is successful
@@ -142,10 +138,10 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, run *v1alph
 			}
 		}
 
-		if !run.Spec.Destroy {
-			r.Recorder.Event(run, "Normal", "Completed", fmt.Sprintf("Run(%s) completed", run.Status.RunID))
-		} else {
+		if run.Spec.Destroy {
 			r.Recorder.Event(run, "Normal", "Destroyed", fmt.Sprintf("Run(%s) completed with terraform destroy", run.Status.RunID))
+		} else {
+			r.Recorder.Event(run, "Normal", "Completed", fmt.Sprintf("Run(%s) completed", run.Status.RunID))
 		}
 
 		r.updateRunStatus(ctx, run, v1alpha1.RunCompleted)
@@ -166,7 +162,6 @@ func (r *TerraformReconciler) checkDependencies(ctx context.Context, run v1alpha
 	dependencies := []v1alpha1.Terraform{}
 
 	for _, d := range run.Spec.DependsOn {
-
 		if d.Namespace == "" {
 			d.Namespace = run.Namespace
 		}
@@ -211,27 +206,29 @@ func setVariablesFromDependencies(run *v1alpha1.Terraform, dependencies []v1alph
 		}
 
 		for index, d := range dependencies {
-			if d.Name == v.DependencyRef.Name && d.Namespace == run.Namespace {
-				tfVarRef := &v1.EnvVarSource{
-					SecretKeyRef: &v1.SecretKeySelector{
-						Key: v.DependencyRef.Key,
-						LocalObjectReference: v1.LocalObjectReference{
-							Name: d.Status.OutputSecretName,
-						},
-					},
-				}
-
-				tfVar := v1alpha1.Variable{
-					Key:           v.Key,
-					DependencyRef: v.DependencyRef,
-					ValueFrom:     tfVarRef,
-				}
-
-				// remove the current variable from the list
-				run.Spec.Variables = append(run.Spec.Variables[:index], run.Spec.Variables[index+1:]...)
-				// add a new variable with the valueFrom
-				run.Spec.Variables = append(run.Spec.Variables, tfVar)
+			if d.Name != v.DependencyRef.Name || d.Namespace != run.Namespace {
+				continue
 			}
+
+			tfVarRef := &v1.EnvVarSource{
+				SecretKeyRef: &v1.SecretKeySelector{
+					Key: v.DependencyRef.Key,
+					LocalObjectReference: v1.LocalObjectReference{
+						Name: d.Status.OutputSecretName,
+					},
+				},
+			}
+
+			tfVar := v1alpha1.Variable{
+				Key:           v.Key,
+				DependencyRef: v.DependencyRef,
+				ValueFrom:     tfVarRef,
+			}
+
+			// remove the current variable from the list
+			run.Spec.Variables = append(run.Spec.Variables[:index], run.Spec.Variables[index+1:]...)
+			// add a new variable with the valueFrom
+			run.Spec.Variables = append(run.Spec.Variables, tfVar)
 		}
 	}
 }

@@ -80,9 +80,9 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if !controllerutil.ContainsFinalizer(run, v1alpha1.TerraformFinalizer) {
 		controllerutil.AddFinalizer(run, v1alpha1.TerraformFinalizer)
+
 		if err := r.Update(ctx, run); err != nil {
 			r.Log.Error(err, "unable to register finalizer")
-
 			return ctrl.Result{}, err
 		}
 
@@ -98,7 +98,6 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if run.IsSubmitted() || run.IsWaiting() {
 		result, err := r.handleRunCreate(ctx, run, req.NamespacedName)
-
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -108,7 +107,6 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		if result.RequeueAfter > 0 {
 			r.Log.Info(fmt.Sprintf("%s, next run in %s", durationMsg, result.RequeueAfter.String()))
-
 			return result, nil
 		}
 
@@ -117,14 +115,12 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if run.IsStarted() {
 		result, err := r.handleRunJobWatch(ctx, run)
-
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
 		if result.RequeueAfter > 0 {
 			r.Log.Info(fmt.Sprintf("%s, next run in %s", durationMsg, result.RequeueAfter.String()))
-
 			return result, nil
 		}
 
@@ -135,14 +131,12 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		r.Log.Info("updating a terraform run")
 
 		result, err := r.handleRunUpdate(ctx, run, req.NamespacedName)
-
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
 		if result.RequeueAfter > 0 {
 			r.Log.Info(fmt.Sprintf("%s, next run in %s", durationMsg, result.RequeueAfter.String()))
-
 			return result, nil
 		}
 
@@ -153,6 +147,7 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 // SetupWithManager sets up the controller with the Manager.
+// TODO: Should I configure the cache to load the objects owner by Terraform?
 func (r *TerraformReconciler) SetupWithManager(mgr ctrl.Manager, opts TerraformReconcilerOptions) error {
 	r.requeueDependency = opts.RequeueDependencyInterval
 	r.requeueJobWatch = opts.RequeueJobWatchInterval
