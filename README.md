@@ -1,4 +1,5 @@
 # Terraform Operator
+
 <p align="center"><img src="docs/img/tfo.svg" width="260"></p>
 
 <p align="center">
@@ -27,18 +28,18 @@ The Terraform Operator provides support to run Terraform modules in Kubernetes i
 
 This project makes running a Terraform module, Kubernetes native through a single Kubernetes [CRD](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/). You can run the manifest with kubectl, Terraform, GitOps tools, etc...
 
-> **Warning**
+> [!WARNING]
 >
 > The Terraform Operator is an experimental project at this stage
 
 
-**Disclaimer**
-
-This project is not a YAML to HCL converter. It just provides a way to run Terraform commands through a Kubernetes CRD. To see how this controller works, have a look at the [design doc](https://kuptan.github.io/terraform-operator/design/)
+> [!IMPORTANT] Disclaimer
+>
+> This project is not a YAML to HCL converter. It just provides a way to run Terraform commands through a Kubernetes CRD. > To see how this controller works, have a look at the [design doc](https://kuptan.github.io/terraform-operator/design/)
 
 ## Installation
 
-**Helm**
+### Helm
 
 ```bash
   helm repo add kuptan https://kuptan.github.io/helm-charts
@@ -47,7 +48,7 @@ This project is not a YAML to HCL converter. It just provides a way to run Terra
 
 Chart can be found [here](https://github.com/kuptan/helm-charts/tree/master/charts/terraform-operator)
 
-**Kubectl**
+## Kubectl
 
 ```bash
   kubectl apply -k https://github.com/kuptan/terraform-operator/config/crd 
@@ -55,9 +56,11 @@ Chart can be found [here](https://github.com/kuptan/helm-charts/tree/master/char
 ```
 
 ## Docuemntation
+
 Check the Terraform Operator [docs](https://kuptan.github.io/terraform-operator/) for more details and examples
 
 ## Features
+
 - [x] Point to any Terraform module (including Git)
 - [x] Private Git repos authentication
 - [x] Define Terraform variables and variable files
@@ -69,6 +72,7 @@ Check the Terraform Operator [docs](https://kuptan.github.io/terraform-operator/
 - [x] Specify retry limits
 
 ## Usage
+
 For more examples on how to use this CRD, check the [samples](https://kuptan.github.io/terraform-operator/examples/)
 
 ```yaml
@@ -158,13 +162,15 @@ spec:
 ```
 
 ## Roadmap
+
 Check the [Terraform Operator Project](https://github.com/orgs/kuptan/projects/1) to see what's on the roadmap
 
 ## Contributing
+
 If you find this project useful, help us:
 
 - Support the development of this project and star this repo! :star:
 - Help new users with issues they may encounter :muscle:
-- Send a pull request with your new features and bug fixes :rocket: 
+- Send a pull request with your new features and bug fixes :rocket:
 
 For instructions about setting up your environment to develop and extend the operator, please see [contributing.md](https://kuptan.github.io/terraform-operator/contributing-guide/)
