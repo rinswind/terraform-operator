@@ -18,17 +18,12 @@ var ClientSet kubernetes.Interface
 // CreateK8SConfig creates the Kube client set
 func CreateK8SConfig() (*rest.Config, error) {
 	l := log.FromContext(context.Background())
-	dir, err := os.Getwd()
 
-	if err != nil {
-		l.Error(err, "could not retreive currect directory")
-		return nil, err
-	}
-
-	kubeconfigPath := filepath.Join(dir, "kubeconfig")
-
+	var err error
 	var clientset *kubernetes.Clientset
 	var config *rest.Config
+
+	kubeconfigPath := filepath.Join(os.Getenv("KUBECONFIG"))
 
 	if utils.FileExists(kubeconfigPath) {
 		if config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath); err != nil {
@@ -42,10 +37,9 @@ func CreateK8SConfig() (*rest.Config, error) {
 		}
 	}
 
-	clientset, err = kubernetes.NewForConfig(config)
-
-	if err != nil {
+	if clientset, err = kubernetes.NewForConfig(config); err != nil {
 		l.Error(err, "Failed to create K8s clientset")
+		return nil, err
 	}
 
 	ClientSet = clientset

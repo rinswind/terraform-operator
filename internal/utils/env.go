@@ -19,7 +19,6 @@ var Env *EnvConfig
 // getEnvOrPanic returns a required environment variable and panics if it does not exist
 func getEnvOrPanic(name string) string {
 	env, present := os.LookupEnv(name)
-
 	if !present {
 		log.Panicf("environment variable '%s' is required but was not found", name)
 	}
@@ -29,12 +28,9 @@ func getEnvOrPanic(name string) string {
 
 // getEnvOptional returns an optional environment variable if exist
 func getEnvOptional(name string) string {
-	env, present := os.LookupEnv(name)
-
-	if present {
+	if env, present := os.LookupEnv(name); present {
 		return env
 	}
-
 	return ""
 }
 
