@@ -43,7 +43,7 @@ var _ = Describe("Terraform Controller", func() {
 					Version: "0.0.1",
 				},
 				Variables: []v1alpha1.Variable{
-					v1alpha1.Variable{
+					{
 						Key:   "length",
 						Value: "16",
 					},
@@ -254,7 +254,7 @@ var _ = Describe("Terraform Controller", func() {
 					Version: "0.0.3",
 				},
 				Outputs: []*v1alpha1.Output{
-					&v1alpha1.Output{
+					{
 						Key:              "number",
 						ModuleOutputName: "number",
 					},
@@ -274,7 +274,7 @@ var _ = Describe("Terraform Controller", func() {
 					Version: "0.0.3",
 				},
 				Variables: []v1alpha1.Variable{
-					v1alpha1.Variable{
+					{
 						Key: "length",
 						DependencyRef: &v1alpha1.TerraformDependencyRef{
 							Name: run1Key.Name,
@@ -283,7 +283,7 @@ var _ = Describe("Terraform Controller", func() {
 					},
 				},
 				DependsOn: []*v1alpha1.DependsOn{
-					&v1alpha1.DependsOn{
+					{
 						Name:      run1Key.Name,
 						Namespace: run1Key.Namespace,
 					},

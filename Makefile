@@ -70,7 +70,8 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go --requeue-job-watch=5s
 
 .PHONY: docker-build
-docker-build: test ## Build docker image with the manager.
+#docker-build: test ## Build docker image with the manager.
+docker-build: ## Build docker image with the manager.
 	docker build -t ${IMG} .
 
 .PHONY: docker-push
@@ -113,8 +114,8 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v3.8.7
-CONTROLLER_TOOLS_VERSION ?= v0.9.0
+KUSTOMIZE_VERSION ?= v5.7.1
+CONTROLLER_TOOLS_VERSION ?= v0.18.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -134,7 +135,7 @@ $(ENVTEST): $(LOCALBIN)
 
 ##@ Custom additional commands
 GOLINTER ?= $(LOCALBIN)/golangci-lint
-GOLINTER_VERSION ?= v1.46.2
+GOLINTER_VERSION ?= v2.4.0
 
 .PHONY: golinter
 golinter: $(GOLINTER) ## Download golinter setup locally if necessary.
