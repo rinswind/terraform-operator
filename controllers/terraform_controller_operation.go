@@ -7,87 +7,51 @@ import (
 	"time"
 
 	"github.com/kuptan/terraform-operator/api/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-// func (r *TerraformReconciler) updateRunStatus(ctx context.Context, run *v1alpha1.Terraform, status v1alpha1.TerraformRunStatus) {
-// 	run.Status.RunStatus = status
+func (r *TerraformReconciler) updateRunStatus(
+	ctx context.Context, run *v1alpha1.Terraform, status v1alpha1.TerraformRunStatus) error {
 
-// 	// set completion time of the run only if status is completed/failed
-// 	if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed {
-// 		run.Status.CompletionTime = time.Now().Format(time.UnixDate)
-// 	}
-
-// 	// record the status only if completed/failed/waiting
-// 	if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed || status == v1alpha1.RunWaitingForDependency {
-// 		r.MetricsRecorder.RecordStatus(run.Name, run.Namespace, status)
-// 	}
-
-// 	if err := r.Status().Update(ctx, run); err != nil {
-// 		r.Log.Error(err, "failed to update status")
-// 	}
-// }
-
-func (r *TerraformReconciler) updateRunStatus(ctx context.Context, run *v1alpha1.Terraform, status v1alpha1.TerraformRunStatus) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		// Get the latest version of the object
-		latest := &v1alpha1.Terraform{}
-		if err := r.Get(ctx, client.ObjectKeyFromObject(run), latest); err != nil {
-			return err
-		}
-
-		// Update the status on the latest version
-		latest.Status.RunStatus = status
-
-		// Ensure ObservedGeneration is updated to match current Generation
-		latest.Status.ObservedGeneration = latest.Generation
-
-		// Copy other status fields from the current run object that might have been modified
-		// TODO: Use Status.DeepCopy()?
-		if run.Status.RunID != "" {
-			latest.Status.RunID = run.Status.RunID
-		}
-		if run.Status.PreviousRunID != "" {
-			latest.Status.PreviousRunID = run.Status.PreviousRunID
-		}
-		if run.Status.OutputSecretName != "" {
-			latest.Status.OutputSecretName = run.Status.OutputSecretName
-		}
-		if run.Status.StartedTime != "" {
-			latest.Status.StartedTime = run.Status.StartedTime
-		}
-
-		// set completion time of the run only if status is completed/failed
-		if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed {
-			latest.Status.CompletionTime = time.Now().Format(time.UnixDate)
-		}
-
-		// record the status only if completed/failed/waiting
-		if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed || status == v1alpha1.RunWaitingForDependency {
-			r.MetricsRecorder.RecordStatus(latest.Name, latest.Namespace, status)
-		}
-
-		return r.Status().Update(ctx, latest)
-	})
-}
-
-func (r *TerraformReconciler) handleRunCreate(ctx context.Context, run *v1alpha1.Terraform, namespacedName types.NamespacedName) (ctrl.Result, error) {
-	dependencies, err := r.checkDependencies(ctx, *run)
-
+	run.Status.RunStatus = status
 	run.Status.ObservedGeneration = run.Generation
 
+	if status == v1alpha1.RunStarted {
+		run.Status.StartedTime = time.Now().Format(time.UnixDate)
+		run.Status.OutputSecretName = run.GetOutputSecretName()
+	}
+
+	// set completion time of the run only if status is completed/failed
+	if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed {
+		run.Status.CompletionTime = time.Now().Format(time.UnixDate)
+	}
+
+	// record the status only if completed/failed/waiting
+	if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed || status == v1alpha1.RunWaitingForDependency {
+		r.MetricsRecorder.RecordStatus(run.Name, run.Namespace, status)
+	}
+
+	return r.Status().Update(ctx, run)
+}
+
+func (r *TerraformReconciler) handleRunCreate(
+	ctx context.Context, run *v1alpha1.Terraform, namespacedName types.NamespacedName) (ctrl.Result, error) {
+
+	dependencies, err := r.checkDependencies(ctx, *run)
+
 	if err != nil {
-		if !run.IsWaiting() {
-			r.Recorder.Event(run, "Normal", "Waiting", "Dependencies are not yet completed")
-			r.updateRunStatus(ctx, run, v1alpha1.RunWaitingForDependency)
+		if run.IsWaiting() {
+			return ctrl.Result{RequeueAfter: r.requeueDependency}, nil
 		}
 
+		r.Recorder.Event(run, "Normal", "Waiting", "Dependencies are not yet completed")
+
+		// Always bail out after updating the status
+		r.updateRunStatus(ctx, run, v1alpha1.RunWaitingForDependency)
 		return ctrl.Result{RequeueAfter: r.requeueDependency}, nil
 	}
 
@@ -99,8 +63,8 @@ func (r *TerraformReconciler) handleRunCreate(ctx context.Context, run *v1alpha1
 	if err != nil {
 		r.Log.Error(err, "failed create a terraform run")
 
+		// Always bail out after updating the status
 		r.updateRunStatus(ctx, run, v1alpha1.RunFailed)
-
 		return ctrl.Result{}, err
 	}
 
@@ -110,15 +74,14 @@ func (r *TerraformReconciler) handleRunCreate(ctx context.Context, run *v1alpha1
 		r.Log.Error(err, "failed to cleanup resources")
 	}
 
-	run.Status.OutputSecretName = run.GetOutputSecretName()
-	run.Status.StartedTime = time.Now().Format(time.UnixDate)
-
+	// Always bail out after updating the status
 	r.updateRunStatus(ctx, run, v1alpha1.RunStarted)
-
 	return ctrl.Result{}, nil
 }
 
-func (r *TerraformReconciler) handleRunUpdate(ctx context.Context, run *v1alpha1.Terraform, namespacedName types.NamespacedName) (ctrl.Result, error) {
+func (r *TerraformReconciler) handleRunUpdate(
+	ctx context.Context, run *v1alpha1.Terraform, namespacedName types.NamespacedName) (ctrl.Result, error) {
+
 	r.Recorder.Event(run, "Normal", "Updated", "Creating a new run job")
 
 	return r.handleRunCreate(ctx, run, namespacedName)
@@ -152,20 +115,16 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, run *v1alph
 
 	defer r.MetricsRecorder.RecordDuration(run.Name, run.Namespace, startTime)
 
-	// job hasn't started
-	if job.Status.Active == 0 && job.Status.Succeeded == 0 && job.Status.Failed == 0 {
-		return ctrl.Result{RequeueAfter: r.requeueJobWatch}, nil
-	}
-
 	// job is still running
 	if job.Status.Active > 0 {
 		if run.IsRunning() {
 			return ctrl.Result{RequeueAfter: r.requeueJobWatch}, nil
 		}
 
-		r.updateRunStatus(ctx, run, v1alpha1.RunRunning)
 		r.Recorder.Event(run, "Normal", "Running", fmt.Sprintf("Run(%s) waiting for run job to finish", run.Status.RunID))
 
+		// Always bail out after updating the status
+		r.updateRunStatus(ctx, run, v1alpha1.RunRunning)
 		return ctrl.Result{}, nil
 	}
 
@@ -189,18 +148,24 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, run *v1alph
 			r.Recorder.Event(run, "Normal", "Completed", fmt.Sprintf("Run(%s) completed", run.Status.RunID))
 		}
 
+		// Always bail out after updating the status
 		r.updateRunStatus(ctx, run, v1alpha1.RunCompleted)
-
 		return ctrl.Result{}, nil
 	}
 
-	// if it got here, then the job is failed -- sadly .... :( :( :(
-	r.Recorder.Event(run, "Warning", "Failed", fmt.Sprintf("Run(%s) failed", run.Status.RunID))
-	r.Log.Error(errors.New("job failed"), "terraform run job failed to complete", "name", job.Name)
+	// job failed
+	if job.Status.Failed > 0 {
+		r.Log.Error(errors.New("job failed"), "terraform run job failed to complete", "name", job.Name)
 
-	r.updateRunStatus(ctx, run, v1alpha1.RunFailed)
+		r.Recorder.Event(run, "Warning", "Failed", fmt.Sprintf("Run(%s) failed", run.Status.RunID))
 
-	return ctrl.Result{}, nil
+		// Always bail out after updating the status
+		r.updateRunStatus(ctx, run, v1alpha1.RunFailed)
+		return ctrl.Result{}, nil
+	}
+
+	// job is still running
+	return ctrl.Result{RequeueAfter: r.requeueJobWatch}, nil
 }
 
 func (r *TerraformReconciler) checkDependencies(ctx context.Context, run v1alpha1.Terraform) ([]v1alpha1.Terraform, error) {
