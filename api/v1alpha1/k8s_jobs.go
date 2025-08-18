@@ -13,14 +13,20 @@ import (
 )
 
 const (
-	tfVarsMountPath           string = "/tmp/tfvars"
-	moduleWorkingDirMountPath string = "/tmp/tfmodule"
-	conifgMapModuleMountPath  string = "/terraform/modules"
-	gitSSHKeyMountPath        string = "/root/.ssh"
+	// ReadOnly volume to read TF vars from
+	tfVarsMountPath string = "/tmp/tfvars"
+
+	// Read/Write volume to execute the project in
+	tfProjectVolumeName   string = "tfproject"
+	tfProjectDirMountPath string = "/tmp/tfproject"
+
+	// Will be mounted in the init-container so it can bootstrap tfProject
+	moduleSourceMountPath string = "/terraform/modules"
+
+	gitSSHKeyVolumeName string = "git-ssh"
+	gitSSHKeyMountPath  string = "/root/.ssh"
 
 	knownHostsVolumeName string = "known-hosts"
-	emptyDirVolumeName   string = "tfmodule"
-	gitSSHKeyVolumeName  string = "git-ssh"
 )
 
 // getTerraformRunnerDockerImage returns the Docker image for the Terraform Runner
@@ -48,17 +54,20 @@ func getEnvVarKey(v Variable) string {
 func (t *Terraform) getRunnerSpecificEnvVars() []corev1.EnvVar {
 	envVars := []corev1.EnvVar{}
 
+	// Terraform execution
 	envVars = append(envVars, getEnvVariable("TERRAFORM_VERSION", t.Spec.TerraformVersion))
-	envVars = append(envVars, getEnvVariable("TERRAFORM_WORKING_DIR", moduleWorkingDirMountPath))
-	envVars = append(envVars, getEnvVariable("TERRAFORM_VAR_FILES_PATH", tfVarsMountPath))
-	envVars = append(envVars, getEnvVariable("OUTPUT_SECRET_NAME", getOutputSecretname(t.Name)))
 	envVars = append(envVars, getEnvVariable("TERRAFORM_DESTROY", strconv.FormatBool(t.Spec.Destroy)))
-
-	envVars = append(envVars, getEnvVariableFromFieldSelector("POD_NAMESPACE", "metadata.namespace"))
-
 	if t.Spec.Workspace != "" {
 		envVars = append(envVars, getEnvVariable("TERRAFORM_WORKSPACE", t.Spec.Workspace))
 	}
+
+	// Terraform project
+	envVars = append(envVars, getEnvVariable("TERRAFORM_PROJECT_PATH", tfProjectDirMountPath))
+	envVars = append(envVars, getEnvVariable("TERRAFORM_VAR_FILES_PATH", tfVarsMountPath))
+
+	// Terraform output
+	envVars = append(envVars, getEnvVariable("OUTPUT_SECRET_NAME", getOutputSecretname(t.Name)))
+	envVars = append(envVars, getEnvVariableFromFieldSelector("POD_NAMESPACE", "metadata.namespace"))
 
 	return envVars
 }
@@ -94,7 +103,7 @@ func (t *Terraform) getRunnerSpecificVolumes() []corev1.Volume {
 
 	name := getUniqueResourceName(t.Name, t.Status.RunID)
 
-	volumes = append(volumes, getEmptyDirVolume(emptyDirVolumeName))
+	volumes = append(volumes, getEmptyDirVolume(tfProjectVolumeName))
 	volumes = append(volumes, getVolumeSpecFromConfigMap(name, name))
 
 	if t.Spec.GitSSHKey != nil && t.Spec.GitSSHKey.ValueFrom != nil {
@@ -122,8 +131,8 @@ func (t *Terraform) getJobVolumes() []corev1.Volume {
 func (t *Terraform) getRunnerSpecificVolumeMounts() []corev1.VolumeMount {
 	mounts := []corev1.VolumeMount{}
 
-	mounts = append(mounts, getVolumeMountSpec(emptyDirVolumeName, moduleWorkingDirMountPath, false))
-	mounts = append(mounts, getVolumeMountSpec(getUniqueResourceName(t.Name, t.Status.RunID), conifgMapModuleMountPath, false))
+	mounts = append(mounts, getVolumeMountSpec(tfProjectVolumeName, tfProjectDirMountPath, false))
+	mounts = append(mounts, getVolumeMountSpec(getUniqueResourceName(t.Name, t.Status.RunID), moduleSourceMountPath, false))
 
 	if t.Spec.GitSSHKey != nil && t.Spec.GitSSHKey.ValueFrom != nil {
 		sshKeyFileName := "id_rsa"
@@ -157,7 +166,7 @@ func (t *Terraform) getJobVolumeMounts() []corev1.VolumeMount {
 func getInitContainersSpec(t *Terraform) []corev1.Container {
 	containers := []corev1.Container{}
 
-	cpModule := fmt.Sprintf("cp %s/main.tf %s/main.tf", conifgMapModuleMountPath, moduleWorkingDirMountPath)
+	cpModule := fmt.Sprintf("cp -v %s/* %s", moduleSourceMountPath, tfProjectDirMountPath)
 
 	commands := []string{
 		"/bin/sh",

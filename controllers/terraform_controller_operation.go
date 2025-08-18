@@ -165,6 +165,8 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, run *v1alph
 
 		r.updateRunStatus(ctx, run, v1alpha1.RunRunning)
 		r.Recorder.Event(run, "Normal", "Running", fmt.Sprintf("Run(%s) waiting for run job to finish", run.Status.RunID))
+
+		return ctrl.Result{}, nil
 	}
 
 	// job is successful
