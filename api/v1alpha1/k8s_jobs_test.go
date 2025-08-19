@@ -113,7 +113,7 @@ var _ = Describe("Kubernetes Jobs", func() {
 					Version: "0.0.1",
 				},
 				VariableFiles: []VariableFile{
-					VariableFile{
+					{
 						Key: "common",
 						ValueFrom: &corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -123,7 +123,7 @@ var _ = Describe("Kubernetes Jobs", func() {
 							},
 						},
 					},
-					VariableFile{
+					{
 						Key: "data",
 						ValueFrom: &corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{

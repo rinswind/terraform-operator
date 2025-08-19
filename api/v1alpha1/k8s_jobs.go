@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/kuptan/terraform-operator/internal/kube"
 	"github.com/kuptan/terraform-operator/internal/utils"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -234,30 +235,41 @@ func getJobSpecForRun(t *Terraform, owner metav1.OwnerReference) *batchv1.Job {
 
 // getJobForRun returns the Kubernetes Job of a specific workflow/run
 func getJobForRun(ctx context.Context, runName string, namespace string, runID string) (*batchv1.Job, error) {
-	jobs := kube.ClientSet.BatchV1().Jobs(namespace)
-
 	name := getUniqueResourceName(runName, runID)
 
-	return jobs.Get(ctx, name, metav1.GetOptions{})
+	obj := &batchv1.Job{}
+
+	if err := getClient(ctx).Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, obj); err != nil {
+		return nil, err
+	}
+
+	return obj, nil
 }
 
 // createJobForRun creates a Kubernetes Job to execute the workflow/run
 func createJobForRun(ctx context.Context, run *Terraform) (*batchv1.Job, error) {
-	jobs := kube.ClientSet.BatchV1().Jobs(run.Namespace)
-
 	ownerRef := run.GetOwnerReference()
 
 	job := getJobSpecForRun(run, ownerRef)
-	return jobs.Create(ctx, job, metav1.CreateOptions{})
+
+	if err := getClient(ctx).Create(ctx, job); err != nil {
+		return nil, err
+	}
+
+	return job, nil
 }
 
 // deleteJobByRun deletes the Kubernetes Job of the workflow/run
 func deleteJobByRun(ctx context.Context, runName string, namespace string, runID string) error {
-	jobs := kube.ClientSet.BatchV1().Jobs(namespace)
+	job, err := getJobForRun(ctx, runName, namespace, runID)
 
-	resourceName := getUniqueResourceName(runName, runID)
+	if err != nil {
+		return err
+	}
 
-	deletePolicy := metav1.DeletePropagationForeground
+	if job == nil {
+		return nil
+	}
 
-	return jobs.Delete(ctx, resourceName, metav1.DeleteOptions{PropagationPolicy: &deletePolicy})
+	return getClient(ctx).Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationForeground))
 }

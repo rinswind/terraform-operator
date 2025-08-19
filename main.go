@@ -38,7 +38,6 @@ import (
 
 	"github.com/kuptan/terraform-operator/api/v1alpha1"
 	"github.com/kuptan/terraform-operator/controllers"
-	"github.com/kuptan/terraform-operator/internal/kube"
 	"github.com/kuptan/terraform-operator/internal/metrics"
 	"github.com/kuptan/terraform-operator/internal/utils"
 	//+kubebuilder:scaffold:imports
@@ -123,11 +122,11 @@ func main() {
 
 	// Registering clientset
 	// TODO: Should use the manager caching client instead
-	_, err = kube.CreateK8SConfig()
-	if err != nil {
-		setupLog.Error(err, "could not create Kubernetes REST config")
-		os.Exit(1)
-	}
+	// _, err = kube.CreateK8SConfig()
+	// if err != nil {
+	// 	setupLog.Error(err, "could not create Kubernetes REST config")
+	// 	os.Exit(1)
+	// }
 
 	utils.LoadEnv()
 

@@ -78,6 +78,9 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	// The reconciler embeds the caching k8s client
+	ctx = context.WithValue(ctx, v1alpha1.ClientKey, r.Client)
+
 	if !controllerutil.ContainsFinalizer(run, v1alpha1.TerraformFinalizer) {
 		controllerutil.AddFinalizer(run, v1alpha1.TerraformFinalizer)
 

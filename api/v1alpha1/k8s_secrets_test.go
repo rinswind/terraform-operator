@@ -56,7 +56,7 @@ var _ = Describe("Kubernetes Secrets", func() {
 		})
 
 		It("should retutrn the secret if exist", func() {
-			secret, err := isSecretExist(context.Background(), expectedSecretName, key.Namespace)
+			secret, err := getSecret(context.Background(), expectedSecretName, key.Namespace)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(secret).ToNot(BeNil())
@@ -80,7 +80,7 @@ var _ = Describe("Kubernetes Secrets", func() {
 				PropagationPolicy: &deletePolicy,
 			})
 
-			secret, err := isSecretExist(context.Background(), expectedSecretName, key.Namespace)
+			secret, err := getSecret(context.Background(), expectedSecretName, key.Namespace)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(secret).To(BeNil())
