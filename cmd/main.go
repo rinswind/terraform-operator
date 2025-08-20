@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/kuptan/terraform-operator/api/v1alpha1"
-	"github.com/kuptan/terraform-operator/controllers"
+	"github.com/kuptan/terraform-operator/internal/controllers"
 	"github.com/kuptan/terraform-operator/internal/metrics"
 	"github.com/kuptan/terraform-operator/internal/utils"
 	//+kubebuilder:scaffold:imports

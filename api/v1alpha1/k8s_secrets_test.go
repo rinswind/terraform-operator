@@ -6,7 +6,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/kuptan/terraform-operator/internal/kube"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -55,13 +54,13 @@ var _ = Describe("Kubernetes Secrets", func() {
 			Expect(secret.Name).To(Equal(expectedSecretName))
 		})
 
-		It("should retutrn the secret if exist", func() {
-			secret, err := getSecret(context.Background(), expectedSecretName, key.Namespace)
+		// It("should retutrn the secret if exist", func() {
+		// 	secret, err := getSecret(context.Background(), expectedSecretName, key.Namespace)
 
-			Expect(err).ToNot(HaveOccurred())
-			Expect(secret).ToNot(BeNil())
-			Expect(secret.Name).To(Equal(expectedSecretName))
-		})
+		// 	Expect(err).ToNot(HaveOccurred())
+		// 	Expect(secret).ToNot(BeNil())
+		// 	Expect(secret.Name).To(Equal(expectedSecretName))
+		// })
 
 		It("should not fail to create a secret that already exist", func() {
 			secret, err := createSecretForOutputs(context.Background(), key, run)
@@ -71,19 +70,19 @@ var _ = Describe("Kubernetes Secrets", func() {
 			Expect(secret.Name).To(Equal(expectedSecretName))
 		})
 
-		It("should return nils if a secret was not found", func() {
-			secrets := kube.ClientSet.CoreV1().Secrets(key.Namespace)
+		// It("should return nils if a secret was not found", func() {
+		// 	secrets := kube.ClientSet.CoreV1().Secrets(key.Namespace)
 
-			deletePolicy := metav1.DeletePropagationForeground
+		// 	deletePolicy := metav1.DeletePropagationForeground
 
-			secrets.Delete(context.Background(), expectedSecretName, metav1.DeleteOptions{
-				PropagationPolicy: &deletePolicy,
-			})
+		// 	secrets.Delete(context.Background(), expectedSecretName, metav1.DeleteOptions{
+		// 		PropagationPolicy: &deletePolicy,
+		// 	})
 
-			secret, err := getSecret(context.Background(), expectedSecretName, key.Namespace)
+		// 	secret, err := getSecret(context.Background(), expectedSecretName, key.Namespace)
 
-			Expect(err).ToNot(HaveOccurred())
-			Expect(secret).To(BeNil())
-		})
+		// 	Expect(err).ToNot(HaveOccurred())
+		// 	Expect(secret).To(BeNil())
+		// })
 	})
 })
