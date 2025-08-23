@@ -1,4 +1,4 @@
-package v1alpha1
+package controllers
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/kuptan/terraform-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -25,29 +26,29 @@ var _ = Describe("Kubernetes Secrets", func() {
 			Namespace: "default",
 		}
 
-		run := &Terraform{
+		t := &TerraformManipulator{&v1alpha1.Terraform{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "bar",
 				Namespace: "default",
 			},
-			Spec: TerraformSpec{
+			Spec: v1alpha1.TerraformSpec{
 				TerraformVersion: "1.0.2",
-				Module: Module{
+				Module: v1alpha1.Module{
 					Source:  "IbraheemAlSaady/test/module",
 					Version: "0.0.2",
 				},
 				Destroy:             false,
 				DeleteCompletedJobs: false,
 			},
-			Status: TerraformStatus{
+			Status: v1alpha1.TerraformStatus{
 				RunID: "1234",
 			},
-		}
+		}}
 
 		expectedSecretName := key.Name + "-outputs"
 
 		It("should create the secret successfully", func() {
-			secret, err := createSecretForOutputs(context.Background(), key, run)
+			secret, err := t.createSecretForOutputs(context.Background(), key)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(secret).ToNot(BeNil())
@@ -63,7 +64,7 @@ var _ = Describe("Kubernetes Secrets", func() {
 		// })
 
 		It("should not fail to create a secret that already exist", func() {
-			secret, err := createSecretForOutputs(context.Background(), key, run)
+			secret, err := t.createSecretForOutputs(context.Background(), key)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(secret).ToNot(BeNil())

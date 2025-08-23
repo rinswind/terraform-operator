@@ -1,4 +1,4 @@
-package v1alpha1
+package resources
 
 import (
 	"crypto/rand"
@@ -52,23 +52,26 @@ func getCommonLabels(name string, runID string) map[string]string {
 	}
 }
 
-func truncateResourceName(s string, i int) string {
-	name := s
-	if len(s) > i {
-		name = s[0:i]
-		// End in alphanum, Assume only "-" and "." can be in name
-		name = strings.TrimRight(name, "-")
-		name = strings.TrimRight(name, ".")
+func truncateResourceName(name string, max int) string {
+	if len(name) < max {
+		return name
 	}
+
+	name = name[0:max]
+
+	// End in alphanum, Assume only "-" and "." can be in name
+	name = strings.TrimRight(name, "-")
+	name = strings.TrimRight(name, ".")
+
 	return name
 }
 
-// getUniqueResourceName returns a unique name for the terraform Run job
-func getUniqueResourceName(name string, runID string) string {
+// GetUniqueResourceName returns a unique name for the terraform Run job
+func GetUniqueResourceName(name string, runID string) string {
 	return fmt.Sprintf("%s-%s", truncateResourceName(name, 220), runID)
 }
 
-// getOutputSecretname returns a unique name for the terraform Run job
-func getOutputSecretname(name string) string {
-	return fmt.Sprintf("%s-outputs", truncateResourceName(name, 220))
+// GetOutputSecretName returns a unique name for the terraform Run job
+func getOutputSecretName(runName string) string {
+	return fmt.Sprintf("%s-outputs", truncateResourceName(runName, 220))
 }

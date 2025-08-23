@@ -1,4 +1,4 @@
-package v1alpha1
+package controllers
 
 import (
 	"context"
@@ -23,7 +23,6 @@ var _ = Describe("Kubernetes RBAC", func() {
 	namespace := "default"
 
 	Context("RBAC", func() {
-
 		It("service account should not be found", func() {
 			found, err := isServiceAccountExist(context.Background(), rbacName, namespace)
 

@@ -1,12 +1,13 @@
-package v1alpha1
+package resources
 
 import (
 	"bytes"
+	"fmt"
 	"text/template"
 )
 
 // getTerraformModuleFromTemplate generates the Terraform module template
-func getTerraformModuleFromTemplate(run *Terraform) ([]byte, error) {
+func (t *TerraformManipulator) GetTerraformModuleFromTemplate() ([]byte, error) {
 	tfTemplate, err := template.New("main.tf").Parse(`terraform {
 		{{- if .Spec.Backend }}
 		{{.Spec.Backend}}
@@ -52,9 +53,21 @@ func getTerraformModuleFromTemplate(run *Terraform) ([]byte, error) {
 	}
 	var tpl bytes.Buffer
 
-	if err := tfTemplate.Execute(&tpl, run); err != nil {
+	if err := tfTemplate.Execute(&tpl, t); err != nil {
 		return nil, err
 	}
 
 	return tpl.Bytes(), nil
+}
+
+// setBackendCfgIfNotExist sets the default backend to Kunernetes if not provided
+func (t *TerraformManipulator) setBackendCfgIfNotExist() {
+	if t.Spec.Backend == "" {
+		t.Spec.Backend = fmt.Sprintf(`backend "kubernetes" {
+  secret_suffix     = "%s"
+  in_cluster_config = true
+  namespace         = "%s"
+}
+`, t.ObjectMeta.Name, t.ObjectMeta.Namespace)
+	}
 }

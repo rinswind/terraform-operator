@@ -1,4 +1,4 @@
-package v1alpha1
+package resources
 
 import (
 	. "github.com/onsi/ginkgo"

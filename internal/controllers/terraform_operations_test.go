@@ -1,10 +1,12 @@
-package v1alpha1
+package controllers
 
 import (
 	"context"
 	"errors"
 
+	"github.com/kuptan/terraform-operator/api/v1alpha1"
 	"github.com/kuptan/terraform-operator/internal/kube"
+	"github.com/kuptan/terraform-operator/internal/resources"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
@@ -30,7 +32,7 @@ var _ = Describe("Terraform", func() {
 	})
 
 	Context("Terraform Kubernetes Create/Get/Delete", func() {
-		var created, fetched *Terraform
+		var created, fetched *TerraformManipulator
 
 		key := types.NamespacedName{
 			Name:      "crud",
@@ -38,32 +40,33 @@ var _ = Describe("Terraform", func() {
 		}
 
 		It("should handle create/get/delete for a Terraform Object", func() {
-			created = &Terraform{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      key.Name,
-					Namespace: key.Namespace,
-				},
-				Spec: TerraformSpec{
-					TerraformVersion: "1.0.2",
-					Module: Module{
-						Source:  "IbraheemAlSaady/test/module",
-						Version: "0.0.1",
+			created = &TerraformManipulator{
+				Terraform: &v1alpha1.Terraform{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      key.Name,
+						Namespace: key.Namespace,
 					},
-					Variables: []Variable{
-						Variable{
-							Key:   "length",
-							Value: "16",
+					Spec: v1alpha1.TerraformSpec{
+						TerraformVersion: "1.0.2",
+						Module: v1alpha1.Module{
+							Source:  "IbraheemAlSaady/test/module",
+							Version: "0.0.1",
 						},
+						Variables: []v1alpha1.Variable{
+							{
+								Key:   "length",
+								Value: "16",
+							},
+						},
+						Destroy:             false,
+						DeleteCompletedJobs: false,
 					},
-					Destroy:             false,
-					DeleteCompletedJobs: false,
-				},
-			}
+				}}
 
 			By("creating a terraform run")
 			Expect(k8sClient.Create(context.TODO(), created)).To(Succeed())
 
-			fetched = &Terraform{}
+			fetched = &TerraformManipulator{}
 			Expect(k8sClient.Get(context.TODO(), key, fetched)).To(Succeed())
 			Expect(fetched).To(Equal(created))
 
@@ -75,53 +78,56 @@ var _ = Describe("Terraform", func() {
 
 	Context("Terraform Statuses", func() {
 		It("should correctly handle run statuses", func() {
-			run1 := &Terraform{
-				Status: TerraformStatus{
+			run1 := &v1alpha1.Terraform{
+				Status: v1alpha1.TerraformStatus{
 					RunID: "",
 				},
 			}
+			t1 := &TerraformManipulator{client: nil, Terraform: run1}
 
 			By("run was just submitted")
-			Expect(run1.IsSubmitted()).To(BeTrue())
+			Expect(t1.IsSubmitted()).To(BeTrue())
 
-			run2 := &Terraform{
+			run2 := &v1alpha1.Terraform{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
 				},
-				Status: TerraformStatus{
-					RunStatus: RunStarted,
+				Status: v1alpha1.TerraformStatus{
+					RunStatus: v1alpha1.RunStarted,
 				},
 			}
 
-			run2.SetRunID()
+			t2 := &TerraformManipulator{client: nil, Terraform: run2}
+			t2.SetRunID()
+
 			Expect(run2.Status.RunID).ToNot(BeEmpty())
 
 			By("run is now in a Started state")
-			Expect(run2.IsSubmitted()).To(BeFalse())
-			Expect(run2.IsStarted()).To(BeTrue())
+			Expect(t2.IsSubmitted()).To(BeFalse())
+			Expect(t2.IsStarted()).To(BeTrue())
 
-			run2.Status.RunStatus = RunRunning
+			run2.Status.RunStatus = v1alpha1.RunRunning
 			By("run is now in a Running state")
-			Expect(run2.IsStarted()).To(BeTrue())
-			Expect(run2.IsRunning()).To(BeTrue())
+			Expect(t2.IsStarted()).To(BeTrue())
+			Expect(t2.IsRunning()).To(BeTrue())
 
-			run2.Status.RunStatus = RunFailed
+			run2.Status.RunStatus = v1alpha1.RunFailed
 			By("run is now in a Failed state")
-			Expect(run2.HasErrored()).To(BeTrue())
+			Expect(t2.HasErrored()).To(BeTrue())
 
 			run2.Status.ObservedGeneration = run2.Generation
 			run2.Generation = 2
 
 			By("run generation was updated")
-			Expect(run2.IsUpdated()).To(BeTrue())
+			Expect(t2.IsUpdated()).To(BeTrue())
 
-			run2.Status.RunStatus = RunWaitingForDependency
+			run2.Status.RunStatus = v1alpha1.RunWaitingForDependency
 			By("run is now in a waiting state")
-			Expect(run2.IsWaiting()).To(BeTrue())
+			Expect(t2.IsWaiting()).To(BeTrue())
 
-			run2.Status.RunStatus = RunCompleted
+			run2.Status.RunStatus = v1alpha1.RunCompleted
 			By("run is now in a Completed state")
-			Expect(run2.IsStarted()).To(BeFalse())
+			Expect(t2.IsStarted()).To(BeFalse())
 		})
 	})
 
@@ -131,19 +137,19 @@ var _ = Describe("Terraform", func() {
 			Namespace: "default",
 		}
 
-		run := &Terraform{
+		run := &v1alpha1.Terraform{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      key.Name,
 				Namespace: key.Namespace,
 			},
-			Spec: TerraformSpec{
+			Spec: v1alpha1.TerraformSpec{
 				TerraformVersion: "1.0.2",
-				Module: Module{
+				Module: v1alpha1.Module{
 					Source:  "IbraheemAlSaady/test/module",
 					Version: "0.0.1",
 				},
-				Variables: []Variable{
-					Variable{
+				Variables: []v1alpha1.Variable{
+					v1alpha1.Variable{
 						Key:   "length",
 						Value: "16",
 					},
@@ -153,32 +159,34 @@ var _ = Describe("Terraform", func() {
 			},
 		}
 
+		t := TerraformManipulator{client: nil, Terraform: run}
+
 		It("should handle a terraform run job", func() {
 			run.Status.RunID = "1234"
 
-			job, err := run.CreateTerraformRun(context.Background(), key)
+			job, err := t.CreateTerraformRun(context.Background(), key)
 			Expect(err).ToNot(HaveOccurred(), "failed to create a terraform run")
 			Expect(job.Name).ToNot(BeEmpty())
 
-			job, err = run.GetJobByRun(context.Background())
+			job, err = t.GetJobByRun(context.Background())
 
 			Expect(err).ToNot(HaveOccurred(), "run job was not found")
 			Expect(job.Name).ToNot(BeEmpty())
 
-			err = run.DeleteAfterCompletion(context.Background())
+			err = t.DeleteAfterCompletion(context.Background())
 
 			Expect(err).ToNot(HaveOccurred(), "failed to clean up resources")
 		})
 
 		It("should get the owner preference", func() {
-			owner := run.GetOwnerReference()
+			owner := t.GetOwnerReference()
 
 			Expect(owner).ToNot(BeNil())
 		})
 
 		It("should handle resource cleanup when there is no previous run", func() {
-			run := &Terraform{
-				Status: TerraformStatus{
+			run := &v1alpha1.Terraform{
+				Status: v1alpha1.TerraformStatus{
 					RunID:         "",
 					PreviousRunID: "",
 				},
@@ -188,8 +196,8 @@ var _ = Describe("Terraform", func() {
 		})
 
 		It("should handle resource cleanup when previous run exist", func() {
-			run := &Terraform{
-				Status: TerraformStatus{
+			run := &v1alpha1.Terraform{
+				Status: v1alpha1.TerraformStatus{
 					RunID:         "1234",
 					PreviousRunID: "612faw",
 				},
@@ -204,19 +212,19 @@ var _ = Describe("Terraform", func() {
 				Namespace: "default",
 			}
 
-			run2 := &Terraform{
+			run2 := &v1alpha1.Terraform{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      key.Name,
 					Namespace: key.Namespace,
 				},
-				Spec: TerraformSpec{
+				Spec: v1alpha1.TerraformSpec{
 					TerraformVersion: "1.0.2",
-					Module: Module{
+					Module: v1alpha1.Module{
 						Source:  "IbraheemAlSaady/test/module",
 						Version: "0.0.1",
 					},
-					Variables: []Variable{
-						Variable{
+					Variables: []v1alpha1.Variable{
+						{
 							Key:   "length",
 							Value: "16",
 						},
@@ -224,7 +232,7 @@ var _ = Describe("Terraform", func() {
 					Destroy:             false,
 					DeleteCompletedJobs: false,
 				},
-				Status: TerraformStatus{
+				Status: v1alpha1.TerraformStatus{
 					RunID: "dahwe12",
 				},
 			}
@@ -244,19 +252,19 @@ var _ = Describe("Terraform", func() {
 			Namespace: "default",
 		}
 
-		run := &Terraform{
+		run := &v1alpha1.Terraform{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      key.Name,
 				Namespace: key.Namespace,
 			},
-			Spec: TerraformSpec{
+			Spec: v1alpha1.TerraformSpec{
 				TerraformVersion: "1.0.2",
-				Module: Module{
+				Module: v1alpha1.Module{
 					Source:  "IbraheemAlSaady/test/module",
 					Version: "0.0.1",
 				},
-				Variables: []Variable{
-					Variable{
+				Variables: []v1alpha1.Variable{
+					v1alpha1.Variable{
 						Key:   "length",
 						Value: "16",
 					},
@@ -264,12 +272,12 @@ var _ = Describe("Terraform", func() {
 				Destroy:             false,
 				DeleteCompletedJobs: false,
 			},
-			Status: TerraformStatus{
+			Status: v1alpha1.TerraformStatus{
 				RunID: "1234",
 			},
 		}
 
-		name := getUniqueResourceName(run.Name, run.Status.RunID)
+		name := resources.GetUniqueResourceName(run.Name, run.Status.RunID)
 
 		It("should fail to create a run due to existing configmap", func() {
 			cfg := corev1.ConfigMap{

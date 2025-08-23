@@ -1,8 +1,10 @@
-package v1alpha1
+package controllers
 
 import (
 	"context"
 
+	"github.com/kuptan/terraform-operator/api/v1alpha1"
+	"github.com/kuptan/terraform-operator/internal/resources"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -26,27 +28,27 @@ var _ = Describe("Kubernetes ConfigMaps", func() {
 			Namespace: "default",
 		}
 
-		run := &Terraform{
+		t := &resources.TerraformManipulator{Terraform: &v1alpha1.Terraform{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "bar",
 				Namespace: "default",
 			},
-			Spec: TerraformSpec{
+			Spec: v1alpha1.TerraformSpec{
 				TerraformVersion: "1.0.2",
-				Module: Module{
+				Module: v1alpha1.Module{
 					Source:  "IbraheemAlSaady/test/module",
 					Version: "0.0.2",
 				},
 				Destroy:             false,
 				DeleteCompletedJobs: false,
 			},
-			Status: TerraformStatus{
+			Status: v1alpha1.TerraformStatus{
 				RunID: "1234",
 			},
-		}
+		}}
 
 		It("should create the configmap successfully", func() {
-			cfg, err := createConfigMapForModule(context.Background(), key, run)
+			cfg, err := t.createConfigMapForModule(context.Background(), key)
 
 			expectedName := "bar-1234"
 
@@ -56,13 +58,13 @@ var _ = Describe("Kubernetes ConfigMaps", func() {
 		})
 
 		It("should delete the configmap successfully", func() {
-			err := deleteConfigMapByRun(context.Background(), key.Name, key.Namespace, run.Status.RunID)
+			err := t.deleteConfigMapByRun(context.Background(), key.Name, key.Namespace, t.Status.RunID)
 
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return an error if the configmap does not exist", func() {
-			err := deleteConfigMapByRun(context.Background(), key.Name, key.Namespace, run.Status.RunID)
+			err := t.deleteConfigMapByRun(context.Background(), key.Name, key.Namespace, t.Status.RunID)
 
 			Expect(err).To(HaveOccurred())
 			Expect(errors.IsNotFound(err)).To(BeTrue())

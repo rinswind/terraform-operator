@@ -1,4 +1,4 @@
-package v1alpha1
+package resources
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/kuptan/terraform-operator/api/v1alpha1"
 	"github.com/kuptan/terraform-operator/internal/kube"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -25,19 +26,19 @@ var _ = Describe("Kubernetes Jobs", func() {
 	Context("Job Spec Validation", func() {
 		var job *batchv1.Job
 
-		run := &Terraform{
+		trop := &TerraformManipulator{&v1alpha1.Terraform{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "bar",
 				Namespace: "default",
 			},
-			Spec: TerraformSpec{
+			Spec: v1alpha1.TerraformSpec{
 				TerraformVersion: "1.0.2",
 				Workspace:        "dev",
-				Module: Module{
+				Module: v1alpha1.Module{
 					Source:  "IbraheemAlSaady/test/module",
 					Version: "0.0.1",
 				},
-				GitSSHKey: &GitSSHKey{
+				GitSSHKey: &v1alpha1.GitSSHKey{
 					ValueFrom: &corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName: "mysecret",
@@ -47,20 +48,20 @@ var _ = Describe("Kubernetes Jobs", func() {
 				Destroy:             false,
 				DeleteCompletedJobs: false,
 			},
-			Status: TerraformStatus{
+			Status: v1alpha1.TerraformStatus{
 				RunID: "12345",
 			},
-		}
+		}}
 
 		ownerRef := metav1.OwnerReference{
-			APIVersion: fmt.Sprintf("%s/%s", GroupVersion.Group, GroupVersion.Version),
+			APIVersion: fmt.Sprintf("%s/%s", v1alpha1.GroupVersion.Group, v1alpha1.GroupVersion.Version),
 			Kind:       "terraform",
 			Name:       "foot",
 			UID:        "1234",
 		}
 
 		It("returns the job spec and should not be null", func() {
-			jobSpec := getJobSpecForRun(run, ownerRef)
+			jobSpec := trop.getJobSpecForRun(ownerRef)
 
 			Expect(jobSpec).ToNot(BeNil())
 
@@ -80,7 +81,7 @@ var _ = Describe("Kubernetes Jobs", func() {
 
 			Expect(sshVolume).ToNot(BeNil())
 			Expect(sshVolume.Name).To(Equal(gitSSHKeyVolumeName))
-			Expect(sshVolume.VolumeSource.Secret.SecretName).To(Equal(run.Spec.GitSSHKey.ValueFrom.Secret.SecretName))
+			Expect(sshVolume.VolumeSource.Secret.SecretName).To(Equal(trop.Spec.GitSSHKey.ValueFrom.Secret.SecretName))
 		})
 
 		It("should contain an environment variable for Terraform workspace", func() {
@@ -94,25 +95,25 @@ var _ = Describe("Kubernetes Jobs", func() {
 			}
 
 			Expect(envVar).ToNot(BeNil())
-			Expect(envVar.Value).To(Equal(run.Spec.Workspace))
+			Expect(envVar.Value).To(Equal(trop.Spec.Workspace))
 		})
 	})
 
 	Context("Multi var file job", func() {
 		var job *batchv1.Job
 
-		run := &Terraform{
+		trop := &TerraformManipulator{&v1alpha1.Terraform{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "bar1",
 				Namespace: "default",
 			},
-			Spec: TerraformSpec{
+			Spec: v1alpha1.TerraformSpec{
 				TerraformVersion: "1.0.2",
-				Module: Module{
+				Module: v1alpha1.Module{
 					Source:  "IbraheemAlSaady/test/module",
 					Version: "0.0.1",
 				},
-				VariableFiles: []VariableFile{
+				VariableFiles: []v1alpha1.VariableFile{
 					{
 						Key: "common",
 						ValueFrom: &corev1.VolumeSource{
@@ -135,20 +136,20 @@ var _ = Describe("Kubernetes Jobs", func() {
 					},
 				},
 			},
-			Status: TerraformStatus{
+			Status: v1alpha1.TerraformStatus{
 				RunID: "12345",
 			},
-		}
+		}}
 
 		ownerRef := metav1.OwnerReference{
-			APIVersion: fmt.Sprintf("%s/%s", GroupVersion.Group, GroupVersion.Version),
+			APIVersion: fmt.Sprintf("%s/%s", v1alpha1.GroupVersion.Group, v1alpha1.GroupVersion.Version),
 			Kind:       "terraform",
 			Name:       "foot",
 			UID:        "1234",
 		}
 
 		It("should return the job spec", func() {
-			jobSpec := getJobSpecForRun(run, ownerRef)
+			jobSpec := trop.getJobSpecForRun(ownerRef)
 
 			Expect(jobSpec).ToNot(BeNil())
 

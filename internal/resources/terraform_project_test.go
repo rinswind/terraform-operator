@@ -1,6 +1,7 @@
-package v1alpha1
+package resources
 
 import (
+	"github.com/kuptan/terraform-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -21,15 +22,15 @@ var _ = Describe("Terraform Module", func() {
 	}`
 	Context("Terraform Template", func() {
 		It("should generate the final module", func() {
-			run := &Terraform{
-				Spec: TerraformSpec{
+			run := &v1alpha1.Terraform{
+				Spec: v1alpha1.TerraformSpec{
 					TerraformVersion: "1.0.2",
-					Module: Module{
+					Module: v1alpha1.Module{
 						Source:  "IbraheemAlSaady/test/module",
 						Version: "0.0.1",
 					},
-					Variables: []Variable{
-						Variable{
+					Variables: []v1alpha1.Variable{
+						{
 							Key:   "length",
 							Value: "16",
 						},
