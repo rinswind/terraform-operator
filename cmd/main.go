@@ -120,14 +120,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Registering clientset
-	// TODO: Should use the manager caching client instead
-	// _, err = kube.CreateK8SConfig()
-	// if err != nil {
-	// 	setupLog.Error(err, "could not create Kubernetes REST config")
-	// 	os.Exit(1)
-	// }
-
 	utils.LoadEnv()
 
 	setupLog.Info("starting manager")

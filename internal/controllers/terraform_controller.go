@@ -25,7 +25,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,12 +32,11 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 
 	"github.com/go-logr/logr"
 	"github.com/kuptan/terraform-operator/api/v1alpha1"
 	"github.com/kuptan/terraform-operator/internal/metrics"
-	"github.com/kuptan/terraform-operator/internal/resources"
+	"github.com/kuptan/terraform-operator/internal/terraform"
 )
 
 // TerraformReconciler reconciles a Terraform object
@@ -85,7 +83,7 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Wrap the raw resource in a helper that makes it easier to work with it and it's associated resources
-	t := &resources.TerraformManipulator{Terraform: run}
+	t := &terraform.TerraformManipulator{Terraform: run}
 
 	if !controllerutil.ContainsFinalizer(t, v1alpha1.TerraformFinalizer) {
 		controllerutil.AddFinalizer(t, v1alpha1.TerraformFinalizer)
@@ -170,7 +168,7 @@ func (r *TerraformReconciler) SetupWithManager(mgr ctrl.Manager, opts TerraformR
 }
 
 func (r *TerraformReconciler) updateRunStatus(
-	ctx context.Context, t *resources.TerraformManipulator, status v1alpha1.TerraformRunStatus) error {
+	ctx context.Context, t *terraform.TerraformManipulator, status v1alpha1.TerraformRunStatus) error {
 
 	t.Status.RunStatus = status
 	t.Status.ObservedGeneration = t.Generation
@@ -190,11 +188,12 @@ func (r *TerraformReconciler) updateRunStatus(
 		r.MetricsRecorder.RecordStatus(t.Name, t.Namespace, status)
 	}
 
-	return r.Status().Update(ctx, t)
+	err := r.Status().Update(ctx, t.Terraform)
+	return err
 }
 
-func (r *TerraformReconciler) handleRunCreate(ctx context.Context, t *resources.TerraformManipulator) (ctrl.Result, error) {
-	dependencies, err := r.checkDependencies(ctx, t)
+func (r *TerraformReconciler) handleRunCreate(ctx context.Context, t *terraform.TerraformManipulator) (ctrl.Result, error) {
+	dependencies, err := t.CheckDependencies(ctx, r.Client)
 
 	if err != nil {
 		if t.IsWaiting() {
@@ -204,42 +203,41 @@ func (r *TerraformReconciler) handleRunCreate(ctx context.Context, t *resources.
 		r.Recorder.Event(t, "Normal", "Waiting", "Dependencies are not yet completed")
 
 		// Always bail out after updating the status
-		r.updateRunStatus(ctx, t, v1alpha1.RunWaitingForDependency)
-		return ctrl.Result{RequeueAfter: r.requeueDependency}, nil
+		err := r.updateRunStatus(ctx, t, v1alpha1.RunWaitingForDependency)
+		return ctrl.Result{RequeueAfter: r.requeueDependency}, err
 	}
 
-	t.SetRunID()
+	t.SetVariablesFromDependencies(dependencies)
 
-	setVariablesFromDependencies(t, dependencies)
-
-	_, err = r.CreateTerraformRun(ctx, t)
+	_, err = t.CreateTerraformRun(ctx, r.Client)
 	if err != nil {
 		r.Log.Error(err, "failed create a terraform run")
 
 		// Always bail out after updating the status
-		r.updateRunStatus(ctx, t, v1alpha1.RunFailed)
+		if err := r.updateRunStatus(ctx, t, v1alpha1.RunFailed); err != nil {
+			r.Log.Error(err, "failed to update status", "name", t.ObjectMeta.Name, "namespace", t.ObjectMeta.Namespace, "status", v1alpha1.RunFailed)
+		}
 		return ctrl.Result{}, err
 	}
 
 	r.Log.Info("cleaning up old resources if exist")
 
-	if err = r.CleanupResources(ctx, t); err != nil {
+	if err = t.CleanupResources(ctx, r.Client); err != nil {
 		r.Log.Error(err, "failed to cleanup resources")
 	}
 
 	// Always bail out after updating the status
-	r.updateRunStatus(ctx, t, v1alpha1.RunStarted)
-	return ctrl.Result{}, nil
+	err = r.updateRunStatus(ctx, t, v1alpha1.RunStarted)
+	return ctrl.Result{}, err
 }
 
-func (r *TerraformReconciler) handleRunUpdate(ctx context.Context, t *resources.TerraformManipulator) (ctrl.Result, error) {
-
+func (r *TerraformReconciler) handleRunUpdate(ctx context.Context, t *terraform.TerraformManipulator) (ctrl.Result, error) {
 	r.Recorder.Event(t, "Normal", "Updated", "Creating a new run job")
 
 	return r.handleRunCreate(ctx, t)
 }
 
-func (r *TerraformReconciler) handleRunDelete(ctx context.Context, t *resources.TerraformManipulator) (ctrl.Result, error) {
+func (r *TerraformReconciler) handleRunDelete(ctx context.Context, t *terraform.TerraformManipulator) (ctrl.Result, error) {
 	r.Log.Info("terraform run is being deleted", "name", t.Name)
 
 	r.MetricsRecorder.RecordStatus(t.Name, t.Namespace, v1alpha1.RunDeleted)
@@ -252,8 +250,8 @@ func (r *TerraformReconciler) handleRunDelete(ctx context.Context, t *resources.
 	return ctrl.Result{}, nil
 }
 
-func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, t *resources.TerraformManipulator) (ctrl.Result, error) {
-	job, err := r.getJobForRun(ctx, t, t.Status.RunID)
+func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, t *terraform.TerraformManipulator) (ctrl.Result, error) {
+	job, err := t.GetJobForRun(ctx, r.Client, t.Status.RunID)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -276,8 +274,8 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, t *resource
 		r.Recorder.Event(t, "Normal", "Running", fmt.Sprintf("Run(%s) waiting for run job to finish", t.Status.RunID))
 
 		// Always bail out after updating the status
-		r.updateRunStatus(ctx, t, v1alpha1.RunRunning)
-		return ctrl.Result{}, nil
+		err := r.updateRunStatus(ctx, t, v1alpha1.RunRunning)
+		return ctrl.Result{}, err
 	}
 
 	// job is successful
@@ -287,7 +285,7 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, t *resource
 		if t.Spec.DeleteCompletedJobs {
 			r.Log.Info("deleting completed job")
 
-			if err := r.DeleteAfterCompletion(ctx, t); err != nil {
+			if err := t.DeleteAfterCompletion(ctx, r.Client); err != nil {
 				r.Log.Error(err, "failed to delete terraform run job after completion", "name", job.Name)
 			} else {
 				r.Recorder.Event(t, "Normal", "Cleanup", fmt.Sprintf("Run(%s) kubernetes job was deleted", t.Status.RunID))
@@ -301,8 +299,8 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, t *resource
 		}
 
 		// Always bail out after updating the status
-		r.updateRunStatus(ctx, t, v1alpha1.RunCompleted)
-		return ctrl.Result{}, nil
+		err := r.updateRunStatus(ctx, t, v1alpha1.RunCompleted)
+		return ctrl.Result{}, err
 	}
 
 	// job failed
@@ -312,85 +310,10 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, t *resource
 		r.Recorder.Event(t, "Warning", "Failed", fmt.Sprintf("Run(%s) failed", t.Status.RunID))
 
 		// Always bail out after updating the status
-		r.updateRunStatus(ctx, t, v1alpha1.RunFailed)
-		return ctrl.Result{}, nil
+		err = r.updateRunStatus(ctx, t, v1alpha1.RunFailed)
+		return ctrl.Result{}, err
 	}
 
 	// job is still running
 	return ctrl.Result{RequeueAfter: r.requeueJobWatch}, nil
-}
-
-func (r *TerraformReconciler) checkDependencies(ctx context.Context, t *resources.TerraformManipulator) ([]v1alpha1.Terraform, error) {
-	dependencies := []v1alpha1.Terraform{}
-
-	for _, d := range t.Spec.DependsOn {
-		if d.Namespace == "" {
-			d.Namespace = t.Namespace
-		}
-
-		dName := types.NamespacedName{
-			Namespace: d.Namespace,
-			Name:      d.Name,
-		}
-
-		var dRun v1alpha1.Terraform
-
-		err := r.Get(ctx, dName, &dRun)
-
-		if err != nil {
-			return dependencies, fmt.Errorf("unable to get '%s' dependency: %w", dName, err)
-		}
-
-		if dRun.Generation != dRun.Status.ObservedGeneration {
-			return dependencies, fmt.Errorf("dependency '%s' is not ready", dName)
-		}
-
-		if dRun.Status.RunStatus != v1alpha1.RunCompleted {
-			return dependencies, fmt.Errorf("dependency '%s' is not ready", dName)
-		}
-
-		dependencies = append(dependencies, dRun)
-	}
-
-	return dependencies, nil
-}
-
-// setVariablesFromDependencies sets the variable from the output of a dependency
-// this currently only works with runs within the same namespace
-func setVariablesFromDependencies(run *resources.TerraformManipulator, dependencies []v1alpha1.Terraform) {
-	if len(dependencies) == 0 {
-		return
-	}
-
-	for _, v := range run.Spec.Variables {
-		if v.DependencyRef == nil {
-			continue
-		}
-
-		for index, d := range dependencies {
-			if d.Name != v.DependencyRef.Name || d.Namespace != run.Namespace {
-				continue
-			}
-
-			tfVarRef := &v1.EnvVarSource{
-				SecretKeyRef: &v1.SecretKeySelector{
-					Key: v.DependencyRef.Key,
-					LocalObjectReference: v1.LocalObjectReference{
-						Name: d.Status.OutputSecretName,
-					},
-				},
-			}
-
-			tfVar := v1alpha1.Variable{
-				Key:           v.Key,
-				DependencyRef: v.DependencyRef,
-				ValueFrom:     tfVarRef,
-			}
-
-			// remove the current variable from the list
-			run.Spec.Variables = append(run.Spec.Variables[:index], run.Spec.Variables[index+1:]...)
-			// add a new variable with the valueFrom
-			run.Spec.Variables = append(run.Spec.Variables, tfVar)
-		}
-	}
 }
