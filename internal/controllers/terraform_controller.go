@@ -153,8 +153,10 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-// TODO: Should I configure the cache to load the objects owner by Terraform?
+// SetupWithManager sets up the controller with the Manager and configures
+// the owned resources (Jobs, ConfigMaps, Secrets) that will trigger reconcile
+// events when they change state. This establishes the controller's watch
+// relationships and sets reconciler options for requeue intervals.
 func (r *TerraformReconciler) SetupWithManager(mgr ctrl.Manager, opts TerraformReconcilerOptions) error {
 	r.requeueDependency = opts.RequeueDependencyInterval
 	r.requeueJobWatch = opts.RequeueJobWatchInterval
@@ -167,31 +169,9 @@ func (r *TerraformReconciler) SetupWithManager(mgr ctrl.Manager, opts TerraformR
 		Complete(r)
 }
 
-func (r *TerraformReconciler) updateRunStatus(
-	ctx context.Context, t *terraform.TerraformManipulator, status v1alpha1.TerraformRunStatus) error {
-
-	t.Status.RunStatus = status
-	t.Status.ObservedGeneration = t.Generation
-
-	if status == v1alpha1.RunStarted {
-		t.Status.StartedTime = time.Now().Format(time.UnixDate)
-		t.Status.OutputSecretName = t.GetOutputSecretName().Name
-	}
-
-	// set completion time of the run only if status is completed/failed
-	if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed {
-		t.Status.CompletionTime = time.Now().Format(time.UnixDate)
-	}
-
-	// record the status only if completed/failed/waiting
-	if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed || status == v1alpha1.RunWaitingForDependency {
-		r.MetricsRecorder.RecordStatus(t.Name, t.Namespace, status)
-	}
-
-	err := r.Status().Update(ctx, t.Terraform)
-	return err
-}
-
+// handleRunCreate handles the creation of a new Terraform run. It checks dependencies,
+// waits for them to complete if necessary, sets variables from dependencies,
+// creates the Terraform run job, cleans up old resources, and updates the run status.
 func (r *TerraformReconciler) handleRunCreate(ctx context.Context, t *terraform.TerraformManipulator) (ctrl.Result, error) {
 	dependencies, err := t.CheckDependencies(ctx, r.Client)
 
@@ -231,12 +211,18 @@ func (r *TerraformReconciler) handleRunCreate(ctx context.Context, t *terraform.
 	return ctrl.Result{}, err
 }
 
+// handleRunUpdate handles updates to an existing Terraform run by creating a new run job.
+// This method is called when a Terraform resource's generation changes, indicating
+// the spec has been updated and needs to be reconciled.
 func (r *TerraformReconciler) handleRunUpdate(ctx context.Context, t *terraform.TerraformManipulator) (ctrl.Result, error) {
 	r.Recorder.Event(t, "Normal", "Updated", "Creating a new run job")
 
 	return r.handleRunCreate(ctx, t)
 }
 
+// handleRunDelete handles the deletion of a Terraform resource by cleaning up finalizers.
+// This method is called when a Terraform resource is marked for deletion, allowing for
+// graceful cleanup of resources and metrics recording before removal.
 func (r *TerraformReconciler) handleRunDelete(ctx context.Context, t *terraform.TerraformManipulator) (ctrl.Result, error) {
 	r.Log.Info("terraform run is being deleted", "name", t.Name)
 
@@ -250,6 +236,9 @@ func (r *TerraformReconciler) handleRunDelete(ctx context.Context, t *terraform.
 	return ctrl.Result{}, nil
 }
 
+// handleRunJobWatch monitors the status of a Terraform job and updates the run status accordingly.
+// It checks if the job is still running, has succeeded, or has failed, and takes appropriate actions
+// such as cleaning up completed jobs, recording metrics, and updating the Terraform resource status.
 func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, t *terraform.TerraformManipulator) (ctrl.Result, error) {
 	job, err := t.GetJobForRun(ctx, r.Client, t.Status.RunID)
 	if err != nil {
@@ -316,4 +305,32 @@ func (r *TerraformReconciler) handleRunJobWatch(ctx context.Context, t *terrafor
 
 	// job is still running
 	return ctrl.Result{RequeueAfter: r.requeueJobWatch}, nil
+}
+
+// updateRunStatus updates the status of a Terraform run with the provided status.
+// It sets the ObservedGeneration, manages timestamps for started/completed runs,
+// records metrics for specific statuses, and persists the status update to the cluster.
+func (r *TerraformReconciler) updateRunStatus(
+	ctx context.Context, t *terraform.TerraformManipulator, status v1alpha1.TerraformRunStatus) error {
+
+	t.Status.RunStatus = status
+	t.Status.ObservedGeneration = t.Generation
+
+	if status == v1alpha1.RunStarted {
+		t.Status.StartedTime = time.Now().Format(time.UnixDate)
+		t.Status.OutputSecretName = t.GetOutputSecretName().Name
+	}
+
+	// set completion time of the run only if status is completed/failed
+	if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed {
+		t.Status.CompletionTime = time.Now().Format(time.UnixDate)
+	}
+
+	// record the status only if completed/failed/waiting
+	if status == v1alpha1.RunCompleted || status == v1alpha1.RunFailed || status == v1alpha1.RunWaitingForDependency {
+		r.MetricsRecorder.RecordStatus(t.Name, t.Namespace, status)
+	}
+
+	err := r.Status().Update(ctx, t.Terraform)
+	return err
 }
