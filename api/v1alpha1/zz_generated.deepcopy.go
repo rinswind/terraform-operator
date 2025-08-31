@@ -183,6 +183,11 @@ func (in *TerraformList) DeepCopyObject() runtime.Object {
 func (in *TerraformSpec) DeepCopyInto(out *TerraformSpec) {
 	*out = *in
 	out.Module = in.Module
+	if in.ProvidersCache != nil {
+		in, out := &in.ProvidersCache, &out.ProvidersCache
+		*out = new(v1.VolumeSource)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.DependsOn != nil {
 		in, out := &in.DependsOn, &out.DependsOn
 		*out = make([]*DependsOn, len(*in))

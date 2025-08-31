@@ -13,11 +13,15 @@ import (
 
 const (
 	// ReadOnly volume to read TF vars from
-	tfVarsMountPath string = "/tmp/tfvars"
+	tfVarsMountPath string = "/tmp/tf-vars"
 
 	// Read/Write volume to execute the project in
-	tfProjectVolumeName   string = "tfproject"
-	tfProjectDirMountPath string = "/tmp/tfproject"
+	tfProjectVolumeName   string = "tf-project"
+	tfProjectDirMountPath string = "/tmp/tf-project"
+
+	// Read/Write volume to cache terraform providers
+	tfProviderCacheVolumeName string = "tf-plugin-cache"
+	tfProviderCacheMountPath  string = "/tmp/tf-plugin-cache"
 
 	// Will be mounted in the init-container so it can bootstrap tfProject
 	moduleSourceMountPath string = "/terraform/modules"
@@ -72,9 +76,30 @@ func (t *TerraformManipulator) GetJobSpecForRun() *batchv1.Job {
 	return job
 }
 
-// getTerraformRunnerDockerImage returns the Docker image for the Terraform Runner
-func getTerraformRunnerDockerImage() string {
-	return fmt.Sprintf("%s/%s:%s", utils.Env.DockerRepository, utils.Env.TerraformRunnerImage, utils.Env.TerraformRunnerImageTag)
+// getInitContainersSpec returns the initContainers definition for the workflow/run job
+func (t *TerraformManipulator) getInitContainersSpec() []corev1.Container {
+	containers := []corev1.Container{}
+
+	cpModule := fmt.Sprintf("cp -v %s/* %s", moduleSourceMountPath, tfProjectDirMountPath)
+
+	commands := []string{
+		"/bin/sh",
+		"-c",
+	}
+
+	args := []string{
+		cpModule,
+	}
+
+	containers = append(containers, corev1.Container{
+		Name:         "busybox",
+		Image:        getBusyboxDockerImage(),
+		VolumeMounts: t.getRunnerVolumeMounts(),
+		Command:      commands,
+		Args:         args,
+	})
+
+	return containers
 }
 
 // getBusyboxDockerImage returns the busy box image
@@ -82,37 +107,9 @@ func getBusyboxDockerImage() string {
 	return fmt.Sprintf("%s/%s", utils.Env.DockerRepository, "busybox")
 }
 
-// getEnvVarKey appends the prefix TF_VAR_ to the Terraform variable if its not marked as an environment variable
-func getEnvVarKey(v v1alpha1.Variable) string {
-	prefix := ""
-
-	if !v.EnvironmentVariable {
-		prefix = "TF_VAR_"
-	}
-
-	return fmt.Sprintf("%s%s", prefix, v.Key)
-}
-
-// getRunnerSpecificEnvVars returns a list of environment variables to add to the Terraform Runner container
-func (t *TerraformManipulator) getRunnerSpecificEnvVars() []corev1.EnvVar {
-	envVars := []corev1.EnvVar{}
-
-	// Terraform execution
-	envVars = append(envVars, getEnvVariable("TERRAFORM_VERSION", t.Spec.TerraformVersion))
-	envVars = append(envVars, getEnvVariable("TERRAFORM_DESTROY", strconv.FormatBool(t.Spec.Destroy)))
-	if t.Spec.Workspace != "" {
-		envVars = append(envVars, getEnvVariable("TERRAFORM_WORKSPACE", t.Spec.Workspace))
-	}
-
-	// Terraform project
-	envVars = append(envVars, getEnvVariable("TERRAFORM_PROJECT_PATH", tfProjectDirMountPath))
-	envVars = append(envVars, getEnvVariable("TERRAFORM_VAR_FILES_PATH", tfVarsMountPath))
-
-	// Terraform output
-	envVars = append(envVars, getEnvVariable("OUTPUT_SECRET_NAME", t.GetOutputSecretName().Name))
-	envVars = append(envVars, getEnvVariableFromFieldSelector("POD_NAMESPACE", "metadata.namespace"))
-
-	return envVars
+// getTerraformRunnerDockerImage returns the Docker image for the Terraform Runner
+func getTerraformRunnerDockerImage() string {
+	return fmt.Sprintf("%s/%s:%s", utils.Env.DockerRepository, utils.Env.TerraformRunnerImage, utils.Env.TerraformRunnerImageTag)
 }
 
 // getEnvVariables returns Kubernetes Pod environment variables (corev1.EnvVar) to be passed to the workflow/run job
@@ -140,42 +137,66 @@ func (t *TerraformManipulator) getEnvVariables() []corev1.EnvVar {
 	return vars
 }
 
-// getRunnerSpecificVolumes returns the workflow/run volumes list
-func (t *TerraformManipulator) getRunnerSpecificVolumes() []corev1.Volume {
-	volumes := []corev1.Volume{}
+// getEnvVarKey appends the prefix TF_VAR_ to the Terraform variable if its not marked as an environment variable
+func getEnvVarKey(v v1alpha1.Variable) string {
+	prefix := ""
 
-	name := getUniqueResourceName(t.Name, t.Status.RunID)
-
-	volumes = append(volumes, getEmptyDirVolume(tfProjectVolumeName))
-	volumes = append(volumes, getVolumeSpecFromConfigMap(name, name))
-
-	if t.Spec.GitSSHKey != nil && t.Spec.GitSSHKey.ValueFrom != nil {
-		volumes = append(volumes, getVolumeSpec(gitSSHKeyVolumeName, *t.Spec.GitSSHKey.ValueFrom))
-		volumes = append(volumes, getVolumeSpecFromConfigMap(knownHostsVolumeName, utils.Env.KnownHostsConfigMapName))
+	if !v.EnvironmentVariable {
+		prefix = "TF_VAR_"
 	}
 
-	return volumes
+	return fmt.Sprintf("%s%s", prefix, v.Key)
 }
 
-// getJobVolumes return the Kubernetes Job volumes as a list of corev1.Volume
-func (t *TerraformManipulator) getJobVolumes() []corev1.Volume {
-	volumes := []corev1.Volume{}
+// getRunnerSpecificEnvVars returns a list of environment variables to add to the Terraform Runner container
+func (t *TerraformManipulator) getRunnerSpecificEnvVars() []corev1.EnvVar {
+	envVars := []corev1.EnvVar{}
+
+	// Terraform execution
+	envVars = append(envVars, getEnvVariable("TERRAFORM_VERSION", t.Spec.TerraformVersion))
+	envVars = append(envVars, getEnvVariable("TERRAFORM_DESTROY", strconv.FormatBool(t.Spec.Destroy)))
+	if t.Spec.Workspace != "" {
+		envVars = append(envVars, getEnvVariable("TERRAFORM_WORKSPACE", t.Spec.Workspace))
+	}
+
+	// Terraform project
+	envVars = append(envVars, getEnvVariable("TERRAFORM_PROJECT_PATH", tfProjectDirMountPath))
+	envVars = append(envVars, getEnvVariable("TERRAFORM_VAR_FILES_PATH", tfVarsMountPath))
+	if t.Spec.ProvidersCache != nil {
+		envVars = append(envVars, getEnvVariable("TF_PLUGIN_CACHE_DIR", tfProviderCacheMountPath))
+	}
+
+	// Terraform output
+	envVars = append(envVars, getEnvVariable("OUTPUT_SECRET_NAME", t.GetOutputSecretName().Name))
+	envVars = append(envVars, getEnvVariableFromFieldSelector("POD_NAMESPACE", "metadata.namespace"))
+
+	return envVars
+}
+
+// getJobVolumeMounts return the volumes mounts for the Kubernetes Job of the workflow/run
+func (t *TerraformManipulator) getJobVolumeMounts() []corev1.VolumeMount {
+	mounts := []corev1.VolumeMount{}
 
 	for _, file := range t.Spec.VariableFiles {
-		volumes = append(volumes, getVolumeSpec(file.Key, *file.ValueFrom))
+		mountPath := fmt.Sprintf("%s/%s", tfVarsMountPath, file.Key)
+		mounts = append(mounts, getVolumeMountSpec(file.Key, mountPath, true))
 	}
 
-	volumes = append(volumes, t.getRunnerSpecificVolumes()...)
+	mounts = append(mounts, t.getRunnerVolumeMounts()...)
 
-	return volumes
+	return mounts
 }
 
-// getRunnerSpecificVolumeMounts returns a list of volume mounts
-func (t *TerraformManipulator) getRunnerSpecificVolumeMounts() []corev1.VolumeMount {
+// getRunnerVolumeMounts returns a list of volume mounts
+func (t *TerraformManipulator) getRunnerVolumeMounts() []corev1.VolumeMount {
 	mounts := []corev1.VolumeMount{}
 
 	mounts = append(mounts, getVolumeMountSpec(tfProjectVolumeName, tfProjectDirMountPath, false))
 	mounts = append(mounts, getVolumeMountSpec(getUniqueResourceName(t.Name, t.Status.RunID), moduleSourceMountPath, false))
+
+	if t.Spec.ProvidersCache != nil {
+		mounts = append(mounts, getVolumeMountSpec(tfProviderCacheVolumeName, tfProviderCacheMountPath, false))
+	}
 
 	if t.Spec.GitSSHKey != nil && t.Spec.GitSSHKey.ValueFrom != nil {
 		sshKeyFileName := "id_rsa"
@@ -191,42 +212,36 @@ func (t *TerraformManipulator) getRunnerSpecificVolumeMounts() []corev1.VolumeMo
 	return mounts
 }
 
-// getJobVolumeMounts return the volumes mounts for the Kubernetes Job of the workflow/run
-func (t *TerraformManipulator) getJobVolumeMounts() []corev1.VolumeMount {
-	mounts := []corev1.VolumeMount{}
+// getJobVolumes return the Kubernetes Job volumes as a list of corev1.Volume
+func (t *TerraformManipulator) getJobVolumes() []corev1.Volume {
+	volumes := []corev1.Volume{}
 
 	for _, file := range t.Spec.VariableFiles {
-		mountPath := fmt.Sprintf("%s/%s", tfVarsMountPath, file.Key)
-		mounts = append(mounts, getVolumeMountSpec(file.Key, mountPath, true))
+		volumes = append(volumes, getVolumeSpec(file.Key, *file.ValueFrom))
 	}
 
-	mounts = append(mounts, t.getRunnerSpecificVolumeMounts()...)
+	volumes = append(volumes, t.getRunnerVolumes()...)
 
-	return mounts
+	return volumes
 }
 
-// getInitContainersSpec returns the initContainers definition for the workflow/run job
-func (t *TerraformManipulator) getInitContainersSpec() []corev1.Container {
-	containers := []corev1.Container{}
+// getRunnerVolumes returns the workflow/run volumes list
+func (t *TerraformManipulator) getRunnerVolumes() []corev1.Volume {
+	volumes := []corev1.Volume{}
 
-	cpModule := fmt.Sprintf("cp -v %s/* %s", moduleSourceMountPath, tfProjectDirMountPath)
+	name := getUniqueResourceName(t.Name, t.Status.RunID)
 
-	commands := []string{
-		"/bin/sh",
-		"-c",
+	volumes = append(volumes, getEmptyDirVolume(tfProjectVolumeName))
+	volumes = append(volumes, getVolumeSpecFromConfigMap(name, name))
+
+	if t.Spec.ProvidersCache != nil {
+		volumes = append(volumes, getVolumeSpec(tfProviderCacheVolumeName, *t.Spec.ProvidersCache))
 	}
 
-	args := []string{
-		cpModule,
+	if t.Spec.GitSSHKey != nil && t.Spec.GitSSHKey.ValueFrom != nil {
+		volumes = append(volumes, getVolumeSpec(gitSSHKeyVolumeName, *t.Spec.GitSSHKey.ValueFrom))
+		volumes = append(volumes, getVolumeSpecFromConfigMap(knownHostsVolumeName, utils.Env.KnownHostsConfigMapName))
 	}
 
-	containers = append(containers, corev1.Container{
-		Name:         "busybox",
-		Image:        getBusyboxDockerImage(),
-		VolumeMounts: t.getRunnerSpecificVolumeMounts(),
-		Command:      commands,
-		Args:         args,
-	})
-
-	return containers
+	return volumes
 }

@@ -135,6 +135,9 @@ type TerraformSpec struct {
 	// A custom terraform providers configuration
 	// +optional
 	ProvidersConfig string `json:"providersConfig,omitempty"`
+	// A name of a PVC to be passed to terraform to cache providers
+	// +optional
+	ProvidersCache *corev1.VolumeSource `json:"providersCache,omitempty"`
 	// The terraform workspae. Defaults to `default`
 	// +optional
 	Workspace string `json:"workspace,omitempty"`

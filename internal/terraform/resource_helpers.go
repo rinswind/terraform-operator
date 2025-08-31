@@ -41,15 +41,6 @@ func getEmptyDirVolume(name string) corev1.Volume {
 	}
 }
 
-// getVolumeMountSpec returns a volume mount spec
-func getVolumeMountSpec(volumeName string, mountPath string, readOnly bool) corev1.VolumeMount {
-	return corev1.VolumeMount{
-		Name:      volumeName,
-		MountPath: mountPath,
-		ReadOnly:  readOnly,
-	}
-}
-
 // getVolumeMountSpecWithSubPath returns a volume mount spec with subpath option
 func getVolumeMountSpecWithSubPath(volumeName string, mountPath string, subPath string, readOnly bool) corev1.VolumeMount {
 	return corev1.VolumeMount{
@@ -57,6 +48,15 @@ func getVolumeMountSpecWithSubPath(volumeName string, mountPath string, subPath 
 		MountPath: mountPath,
 		ReadOnly:  readOnly,
 		SubPath:   subPath,
+	}
+}
+
+// getVolumeMountSpec returns a volume mount spec
+func getVolumeMountSpec(volumeName string, mountPath string, readOnly bool) corev1.VolumeMount {
+	return corev1.VolumeMount{
+		Name:      volumeName,
+		MountPath: mountPath,
+		ReadOnly:  readOnly,
 	}
 }
 
