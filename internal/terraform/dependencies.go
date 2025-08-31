@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kuptan/terraform-operator/api/v1alpha1"
+	"github.com/rinswind/terraform-operator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"

@@ -5,6 +5,7 @@ nav_order: 6
 ---
 
 # Monitoring
+
 The controller writes the following Prometheus metrics.
 
 - `tfo_workflow_total`: The total number of submitted workflows/runs

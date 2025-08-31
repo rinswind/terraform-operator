@@ -5,7 +5,7 @@ nav_order: 9
 ---
 
 # API Reference
-To view the API reference, please visit [this page](https://doc.crds.dev/github.com/kuptan/terraform-operator) 
+To view the API reference, please visit [this page](https://doc.crds.dev/github.com/rinswind/terraform-operator) 
 
 <!-- ---
 layout: default

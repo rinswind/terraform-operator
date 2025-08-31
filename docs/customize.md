@@ -5,13 +5,14 @@ nav_order: 7
 ---
 
 # Customization
-The Terraform Operator uses the [terraform-runner](https://github.com/kuptan/terraform-runner) as its terraform runner to execute terraform commands. If you don't want to use the default [terraform-runner](https://github.com/kuptan/terraform-runner), you can build your own.
+
+The Terraform Operator uses the [terraform-runner](https://github.com/rinswind/terraform-runner) as its terraform runner to execute terraform commands. If you don't want to use the default [terraform-runner](https://github.com/rinswind/terraform-runner), you can build your own.
 
 To make the operator use your terraform runner, the Terraform Operator expects the following environment variables:
 
 ```
 DOCKER_REGISTRY=docker.io
-TERRAFORM_RUNNER_IMAGE=kubechamp/terraform-runner
+TERRAFORM_RUNNER_IMAGE=rinswind/terraform-runner
 TERRAFORM_RUNNER_IMAGE_TAG=0.0.4 ## <- this might be different
 ```
 
@@ -21,14 +22,15 @@ The above are the defaults that are passed to the operator. In helm, you can ove
 terraformRunner:
   image:
     registry: docker.io
-    repository: kubechamp/terraform-runner
+    repository: rinswind/terraform-runner
     tag: "0.0.4"
 ```
 
 ## Building Your Runner
+
 The runner of course must be a docker container at the end, the implementation in the container is up to you, however, there are few things to keep in mind.
 
-When Terraform Operator creates Kubernetes jobs with the Terraform Runner, it sets some environment variables on the Terraform Runner container. For a technical view, have a look at this [code section](https://github.com/kuptan/terraform-operator/blob/master/api/v1alpha1/k8s_jobs.go#L16)
+When Terraform Operator creates Kubernetes jobs with the Terraform Runner, it sets some environment variables on the Terraform Runner container. For a technical view, have a look at this [code section](https://github.com/rinswind/terraform-operator/blob/master/api/v1alpha1/k8s_jobs.go#L16)
 
 
 | Environment Variable     | Default value        | Description                                                                        |
@@ -42,6 +44,7 @@ When Terraform Operator creates Kubernetes jobs with the Terraform Runner, it se
 | POD_NAMESPACE            | `metadata.namespace` | The Kubernetes namespace where the job is created                                  |
 
 ## Git SSH
+
 If the the `spec.gitSSHKey` was provided to authenticate against private git repositories, the path to the ssh key will be `/root/.ssh/id_rsa`.
 
 You need to add the ssh key `ssh-add /root/.ssh/id_rsa`

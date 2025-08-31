@@ -34,9 +34,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/go-logr/logr"
-	"github.com/kuptan/terraform-operator/api/v1alpha1"
-	"github.com/kuptan/terraform-operator/internal/metrics"
-	"github.com/kuptan/terraform-operator/internal/terraform"
+	"github.com/rinswind/terraform-operator/api/v1alpha1"
+	"github.com/rinswind/terraform-operator/internal/metrics"
+	"github.com/rinswind/terraform-operator/internal/terraform"
 )
 
 // TerraformReconciler reconciles a Terraform object
@@ -88,7 +88,7 @@ func (r *TerraformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if !controllerutil.ContainsFinalizer(t, v1alpha1.TerraformFinalizer) {
 		controllerutil.AddFinalizer(t, v1alpha1.TerraformFinalizer)
 
-		if err := r.Update(ctx, t); err != nil {
+		if err := r.Update(ctx, t.Terraform); err != nil {
 			r.Log.Error(err, "unable to register finalizer")
 			return ctrl.Result{}, err
 		}

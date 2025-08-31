@@ -1,4 +1,4 @@
-module github.com/kuptan/terraform-operator
+module github.com/rinswind/terraform-operator
 
 go 1.24.0
 

@@ -3,8 +3,8 @@ package metrics
 import (
 	"time"
 
-	"github.com/kuptan/terraform-operator/api/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rinswind/terraform-operator/api/v1alpha1"
 )
 
 // RecorderInterface is an interface that holds the functions used by the recorder struct

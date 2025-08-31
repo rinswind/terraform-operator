@@ -3,7 +3,7 @@ package terraform
 import (
 	"fmt"
 
-	"github.com/kuptan/terraform-operator/api/v1alpha1"
+	"github.com/rinswind/terraform-operator/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

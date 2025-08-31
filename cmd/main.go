@@ -36,10 +36,10 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/kuptan/terraform-operator/api/v1alpha1"
-	"github.com/kuptan/terraform-operator/internal/controllers"
-	"github.com/kuptan/terraform-operator/internal/metrics"
-	"github.com/kuptan/terraform-operator/internal/utils"
+	"github.com/rinswind/terraform-operator/api/v1alpha1"
+	"github.com/rinswind/terraform-operator/internal/controllers"
+	"github.com/rinswind/terraform-operator/internal/metrics"
+	"github.com/rinswind/terraform-operator/internal/utils"
 	//+kubebuilder:scaffold:imports
 )
 

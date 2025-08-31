@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/kuptan/terraform-operator/api/v1alpha1"
-	"github.com/kuptan/terraform-operator/internal/utils"
+	"github.com/rinswind/terraform-operator/api/v1alpha1"
+	"github.com/rinswind/terraform-operator/internal/utils"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

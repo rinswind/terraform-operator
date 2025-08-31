@@ -3,9 +3,9 @@ package metrics
 import (
 	"time"
 
-	"github.com/kuptan/terraform-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/rinswind/terraform-operator/api/v1alpha1"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
